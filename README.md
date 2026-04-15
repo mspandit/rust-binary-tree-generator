@@ -1,6 +1,6 @@
 # Generating Binary Trees
 
-Code to accompany [this blog post](https://mspandit.github.io/2026/04/13/more-functional-generation.html).
+Code to accompany [this blog post](https://mspandit.github.io/2026/04/14/cfg-parsing.html).
 
 # Execution Expectation
 ```
