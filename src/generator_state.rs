@@ -17,13 +17,15 @@ fn process_fn<T: Token>(token: T, grammar: &Grammar<T>)
             |t_labels| t_labels.iter().fold(
                 new_stacks,
                 |mut new_stacks, terminal_label| {
-                    new_stacks.append(&mut current_stack.clone().shift_reduce(
+                    new_stacks.append(&mut current_stack.clone()
+                        .shift_reduce(
                             BinaryTree::Terminal {
-                            label: terminal_label.clone(),
-                            token: token.clone()
-                        },
-                        grammar
-                    ));
+                                label: terminal_label.clone(),
+                                token: token.clone()
+                            },
+                            grammar
+                        )
+                    );
                     new_stacks
                 }
             )

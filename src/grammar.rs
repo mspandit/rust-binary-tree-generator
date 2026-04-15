@@ -25,13 +25,22 @@ impl Grammar<char> {
         unigrams.insert('2', vec!["E".to_string()]);
         unigrams.insert('3', vec!["E".to_string()]);
         unigrams.insert('4', vec!["E".to_string()]);
-        unigrams.insert('-', vec!["UnOp".to_string(), "BinOp".to_string()]);
+        unigrams.insert('-', vec![
+            "UnOp".to_string(),
+            "BinOp".to_string()
+        ]);
         unigrams.insert('+', vec!["BinOp".to_string()]);
         unigrams.insert('*', vec!["BinOp".to_string()]);
         let mut digrams = HashMap::default();
-        digrams.insert(("UnOp".to_string(), "E".to_string()), vec!["E".to_string()]);
-        digrams.insert(("E".to_string(), "BinOp".to_string()), vec!["EBO".to_string()]);
-        digrams.insert(("EBO".to_string(), "E".to_string()), vec!["E".to_string()]);
+        digrams.insert(("UnOp".to_string(), "E".to_string()), vec![
+            "E".to_string()
+        ]);
+        digrams.insert(("E".to_string(), "BinOp".to_string()), vec![
+            "EBO".to_string()
+        ]);
+        digrams.insert(("EBO".to_string(), "E".to_string()), vec![
+            "E".to_string()
+        ]);
         Self { unigrams, digrams }
     }
 }
@@ -45,11 +54,21 @@ impl Grammar<&str> {
         unigrams.insert("on", vec!["P".to_string()]);
         unigrams.insert("mat", vec!["N".to_string()]);
         let mut digrams = HashMap::default();
-        digrams.insert(("Det".to_string(), "N".to_string()), vec!["NP".to_string()]);
-        digrams.insert(("V".to_string(), "NP".to_string()), vec!["VP".to_string()]);
-        digrams.insert(("P".to_string(), "NP".to_string()), vec!["PP".to_string()]);
-        digrams.insert(("V".to_string(), "PP".to_string()), vec!["VP".to_string()]);
-        digrams.insert(("NP".to_string(), "VP".to_string()), vec!["S".to_string()]);
+        digrams.insert(("Det".to_string(), "N".to_string()), vec![
+            "NP".to_string()
+        ]);
+        digrams.insert(("V".to_string(), "NP".to_string()), vec![
+            "VP".to_string()
+        ]);
+        digrams.insert(("P".to_string(), "NP".to_string()), vec![
+            "PP".to_string()
+        ]);
+        digrams.insert(("V".to_string(), "PP".to_string()), vec![
+            "VP".to_string()
+        ]);
+        digrams.insert(("NP".to_string(), "VP".to_string()), vec![
+            "S".to_string()
+        ]);
         Self { unigrams, digrams }
     }
 }

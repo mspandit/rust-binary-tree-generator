@@ -22,8 +22,11 @@ impl<T: Token> Stack<T> {
         self.0.push(tree);
     }
 
-    pub fn shift_reduce(mut self: Self, tree: BinaryTree<T>, grammar: & Grammar<T>)
-    -> Vec<Self> {
+    pub fn shift_reduce(
+        mut self: Self,
+        tree: BinaryTree<T>,
+        grammar: & Grammar<T>
+    ) -> Vec<Self> {
         match self.pop() {
             None => {
                 self.push(tree); // shift only
@@ -36,7 +39,9 @@ impl<T: Token> Stack<T> {
                 self.push(tree.clone()); // shift
                 let new_stacks = vec![self.clone()];
 
-                match grammar.lookup_nonterminals(&(popped_tree.label(), tree.label())) {
+                match grammar.lookup_nonterminals(
+                    &(popped_tree.label(), tree.label())
+                ) {
                     None => new_stacks,
                     Some(new_nonterminal_labels) => {
                         new_nonterminal_labels.iter().fold(
@@ -47,7 +52,9 @@ impl<T: Token> Stack<T> {
                                     left: Box::new(popped_tree.clone()),
                                     right: Box::new(tree.clone()),
                                 };
-                                new_stacks.append(&mut r.clone().shift_reduce(new_nonterminal, grammar));
+                                new_stacks.append(&mut r.clone()
+                                    .shift_reduce(new_nonterminal, grammar)
+                                );
                                 new_stacks
                             }
                         )

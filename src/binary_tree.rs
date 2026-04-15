@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::Token;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum BinaryTree<T: Token> {
     Terminal { label: String, token: T },
     Nonterminal {
