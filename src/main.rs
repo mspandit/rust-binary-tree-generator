@@ -5,6 +5,8 @@ mod stack;
 mod binary_tree;
 mod generator_state;
 mod grammar;
+mod baker;
+mod bayesian_pcfg_induction;
 trait Token: Clone + Display + Default + Eq + Hash {}
 
 impl Token for char {}
