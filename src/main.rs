@@ -7,6 +7,7 @@ mod generator_state;
 mod grammar;
 mod baker;
 mod bayesian_pcfg_induction;
+mod berwick_pilato;
 trait Token: Clone + Display + Default + Eq + Hash {}
 
 impl Token for char {}
