@@ -1,15 +1,16 @@
+use std::fmt::Debug;
 use crate::{Token, binary_tree::BinaryTree, grammar::Grammar, stack::Stack};
 
 #[derive(Debug)]
-pub struct GeneratorState<T: Token>(Vec<Stack<T>>);
+pub struct GeneratorState<T: Token + Debug>(Vec<Stack<T>>);
 
-impl<T: Token> Default for GeneratorState<T> {
+impl<T: Token + Debug> Default for GeneratorState<T> {
     fn default() -> Self {
         Self(vec![Stack::default()])
     }
 }
 
-fn process_fn<T: Token>(token: T, grammar: &Grammar<T>)
+fn process_fn<T: Token + Debug>(token: T, grammar: &Grammar<T>)
 -> impl Fn(Vec<Stack<T>>, Stack<T>) -> Vec<Stack<T>> {
     move |new_stacks, current_stack| {
         grammar.lookup_terminals(& token).map_or(
@@ -33,7 +34,7 @@ fn process_fn<T: Token>(token: T, grammar: &Grammar<T>)
     }
 }
 
-impl<T: Token> GeneratorState<T> {
+impl<T: Token + Debug> GeneratorState<T> {
     #[cfg(test)]
     pub fn len(self: & Self) -> usize {
         self.0.len()

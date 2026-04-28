@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{ Debug, Display };
 use std::hash::Hash;
 use crate::{binary_tree::BinaryTree, generator_state::GeneratorState, grammar::Grammar};
 mod stack;
@@ -26,7 +26,7 @@ impl<'a> Tokenizeable<&'a str> for Vec<&'a str> {
     }
 }
 
-fn generate_stacks<T: Token>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T>)
+fn generate_stacks<T: Token + Debug>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T>)
 -> GeneratorState<T> {
     input_sequence.fold(
         GeneratorState::default(),
@@ -36,7 +36,7 @@ fn generate_stacks<T: Token>(input_sequence: impl Iterator<Item = T>, grammar: &
     )
 }
 
-fn generate<T: Token>(input_sequence: impl Tokenizeable<T>, grammar: &Grammar<T>)
+fn generate<T: Token + Debug>(input_sequence: impl Tokenizeable<T>, grammar: &Grammar<T>)
 -> Vec<BinaryTree<T>> {
     generate_stacks(input_sequence.tokenize(), grammar)
         .filter_stacks()
