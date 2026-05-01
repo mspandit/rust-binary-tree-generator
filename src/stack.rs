@@ -40,31 +40,35 @@ impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
         Stack(Some(Rc::new(closure)))
     }
 
-    pub fn shift_reduce(self: Self, mut tree: BinaryTree<T>, grammar: &Grammar<T>) -> Vec<Self> {
-        let mut stack = self.clone();
-        let mut retval = vec![stack.clone().push(tree.clone())];
-        loop {
-            match stack.0 {
-                None => break,
-                Some(ref f) => {
-                    let (popped, rest) = f();
-                    match grammar.lookup_nonterminals(&(popped.label(), tree.label())) {
-                        None => { break },
-                        Some(new_nonterminal_label) => {
-                            let new_nonterminal = BinaryTree::Nonterminal {
-                                label: new_nonterminal_label.clone(),
-                                left: Box::new(popped.clone()),
-                                right: Box::new(tree.clone())
-                            };
-                            retval.push(rest.clone().push(new_nonterminal.clone()));
-                            tree = new_nonterminal;
-                        }
+    fn shift_reduce0(
+        self: Self,
+        tree: BinaryTree<T>,
+        grammar: &Grammar<T>,
+        mut acc: Vec<Self>) -> Vec<Self> {
+        self.0.map_or(
+            acc.clone(),
+            |ref f| {
+                let (popped, rest) = f();
+                grammar.lookup_nonterminals(&(popped.label(), tree.label())).map_or(
+                    acc.clone(),
+                    |new_nonterminal_label| {
+                        let new_nonterminal = BinaryTree::Nonterminal {
+                            label: new_nonterminal_label.clone(),
+                            left: Box::new(popped.clone()),
+                            right: Box::new(tree.clone())
+                        };
+                        acc.push(rest.clone().push(new_nonterminal.clone()));
+                        rest.shift_reduce0(new_nonterminal, grammar, acc)
                     }
-                    stack = rest;
-                }
+                )
             }
-        }
-        retval
+        )
+    }
+
+    pub fn shift_reduce(self: Self, tree: BinaryTree<T>, grammar: &Grammar<T>)
+    -> Vec<Self> {
+        self.clone()
+            .shift_reduce0(tree.clone(), grammar, vec![self.push(tree)])
     }
 }
 

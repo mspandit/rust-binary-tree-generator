@@ -18,30 +18,23 @@ impl<T: Token + Debug + 'static> GeneratorState<T> {
 
     pub fn process(self: Self, token: T, grammar: &Grammar<T>) -> Self {
         Self(
-            self.0.into_iter().fold(
-                Vec::default(),
-                |new_stacks, current_stack| {
-                    grammar.lookup_terminals(& token).map_or(
-                        new_stacks.clone(),
-                        |t_labels| {
-                            t_labels.iter().fold(
-                            new_stacks,
-                            |mut new_stacks, terminal_label| {
-                                new_stacks.append(&mut current_stack.clone()
-                                    .shift_reduce(
-                                        BinaryTree::Terminal {
-                                            label: terminal_label.clone(),
-                                            token: token.clone()
-                                        },
-                                        grammar
-                                    )
-                                );
-                                new_stacks
-                            }
-                        )}
-                    )
-                }
-            )
+            self.0.iter().flat_map(|current_stack| {
+                grammar.lookup_terminals(& token).map_or(
+                    Vec::default(),
+                    |t_labels| {
+                        t_labels.iter().flat_map(|terminal_label| {
+                            current_stack.clone()
+                                .shift_reduce(
+                                    BinaryTree::Terminal {
+                                        label: terminal_label.clone(),
+                                        token: token.clone()
+                                    },
+                                    grammar
+                                )
+                        }).collect()
+                    }
+                )
+            }).collect()
         )
     }
 
@@ -59,9 +52,10 @@ impl<T: Token + Debug + 'static> GeneratorState<T> {
         Self(
             self.0.into_iter()
                 .filter(|stack| match stack.0 {
-                     None => false,
+                     None => false, // Filter out empty stacks
                      Some(ref f) => match f() {
                          (_, Stack(None)) => true,
+                         // Filter out stacks with more than one element
                          (_, Stack(Some(_))) => false
                      }
                 })
