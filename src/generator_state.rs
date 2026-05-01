@@ -39,27 +39,25 @@ impl<T: Token + Debug + 'static> GeneratorState<T> {
     }
 
     pub fn tops(self: Self) -> Vec<BinaryTree<T>> {
-        self
-            .0
-            .into_iter()
-            .map(|stack| match stack.0 {
-                 None => panic!("Cannot get top of empty stack"),
-                 Some(ref f) => f().0,
-            }).collect()
+        self.0.into_iter().flat_map(|stack| stack.0.map_or(
+            Vec::default(), // Empty stack --> return empty vector
+            // Non-empty stack --> return vector with element
+            |ref f| vec![f().0]
+        ))
+        .collect()
     }
 
     pub fn filter_stacks(self: Self) -> Self {
         Self(
-            self.0.into_iter()
-                .filter(|stack| match stack.0 {
-                     None => false, // Filter out empty stacks
-                     Some(ref f) => match f() {
-                         (_, Stack(None)) => true,
-                         // Filter out stacks with more than one element
-                         (_, Stack(Some(_))) => false
-                     }
-                })
-                .collect()
+            self.0.into_iter().filter(|stack| match stack.0 {
+                None => false, // Filter out empty stacks
+                Some(ref f) => match f() {
+                    (_, Stack(None)) => true,
+                    // Filter out stacks with more than one element
+                    (_, Stack(Some(_))) => false
+                }
+            })
+            .collect()
         )
     }
 }

@@ -21,23 +21,12 @@ impl<S: Debug + Clone> Debug for Stack<S> {
 }
 
 impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
-    pub fn top(&self) -> BinaryTree<T> {
-        match self.0 {
-             None => panic!("Cannot get top of empty stack"),
-             Some(ref f) => f().0,
-        }
-    }
-
-    fn pop(self: Self) -> (BinaryTree<T>, Self) {
-        match self.0 {
-            None => panic!("Cannot pop from empty stack"),
-            Some(ref f) => f(),
-        }
-    }
-
     fn push(self: Self, element: BinaryTree<T>) -> Self {
-        let closure = move || (element.clone(), self.clone());
-        Stack(Some(Rc::new(closure)))
+        Stack(
+            Some(Rc::new(
+                move || (element.clone(), self.clone())
+            ))
+        )
     }
 
     fn shift_reduce0(
@@ -46,19 +35,34 @@ impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
         grammar: &Grammar<T>,
         mut acc: Vec<Self>) -> Vec<Self> {
         self.0.map_or(
-            acc.clone(),
+            acc.clone(), // Empty stack --> return accumulated stacks
             |ref f| {
                 let (popped, rest) = f();
-                grammar.lookup_nonterminals(&(popped.label(), tree.label())).map_or(
+                grammar
+                .lookup_nonterminals(&(popped.label(), tree.label()))
+                .map_or(
+                    // No matching nonterminals --> return accumulated stacks
                     acc.clone(),
-                    |new_nonterminal_label| {
-                        let new_nonterminal = BinaryTree::Nonterminal {
-                            label: new_nonterminal_label.clone(),
-                            left: Box::new(popped.clone()),
-                            right: Box::new(tree.clone())
-                        };
-                        acc.push(rest.clone().push(new_nonterminal.clone()));
-                        rest.shift_reduce0(new_nonterminal, grammar, acc)
+                    |new_nonterminal_labels| {
+                        new_nonterminal_labels.iter()
+                        .flat_map(|new_nonterminal_label| {
+                            let new_nonterminal = BinaryTree::Nonterminal {
+                                label: new_nonterminal_label.clone(),
+                                left: Box::new(popped.clone()),
+                                right: Box::new(tree.clone())
+                            };
+                            acc.push(
+                                rest
+                                .clone()
+                                .push(new_nonterminal.clone())
+                            );
+                            rest.clone().shift_reduce0(
+                                new_nonterminal,
+                                grammar,
+                                acc.clone()
+                            )
+                        })
+                        .collect()
                     }
                 )
             }
@@ -67,8 +71,9 @@ impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
 
     pub fn shift_reduce(self: Self, tree: BinaryTree<T>, grammar: &Grammar<T>)
     -> Vec<Self> {
-        self.clone()
-            .shift_reduce0(tree.clone(), grammar, vec![self.push(tree)])
+        self
+        .clone()
+        .shift_reduce0(tree.clone(), grammar, vec![self.push(tree)])
     }
 }
 
@@ -97,9 +102,14 @@ mod test {
         ));
         let x = stack.shift_reduce(BinaryTree::Terminal{ label: "E".to_string(), token: '1' }, &Grammar::expression());
         println!("{x:?}");
-        match x[1].top() {
-            BinaryTree::Terminal { label: _, token: _, } => panic!("Expected a nonterminal, got {x:?}"),
-            BinaryTree::Nonterminal { label: _, left: _, right: _ } => (),
+        match x[1] {
+            Stack(None) => panic!("Expected a non-empty stack, got empty"),
+            Stack(Some(ref f)) => match f() {
+                (ref tree, _) => match tree {
+                    BinaryTree::Terminal { label: _, token: _ } => panic!("Expected a nonterminal, got {x:?}"),
+                    BinaryTree::Nonterminal { label: _, left: _, right: _ } => (),
+                }
+            }
         }
     }
 
