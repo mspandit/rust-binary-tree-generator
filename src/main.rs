@@ -1,9 +1,9 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
-use crate::{binary_tree::BinaryTree, generator_state::GeneratorState, grammar::Grammar};
-mod stack;
+use crate::{binary_tree::BinaryTree, state::State, grammar::Grammar};
+mod context;
 mod binary_tree;
-mod generator_state;
+mod state;
 mod grammar;
 trait Token: Clone + Display + Default + Eq + Hash {}
 
@@ -26,10 +26,10 @@ impl<'a> Tokenizeable<&'a str> for Vec<&'a str> {
     }
 }
 
-fn generate_stacks<T: Token + Debug + 'static>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T>)
--> GeneratorState<T> {
+fn generate_contexts<T: Token + Debug + 'static>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T>)
+-> State<T> {
     input_sequence.fold(
-        GeneratorState::default(),
+        State::default(),
         |gen_state, input| {
             gen_state.process(input, grammar)
         }
@@ -38,8 +38,8 @@ fn generate_stacks<T: Token + Debug + 'static>(input_sequence: impl Iterator<Ite
 
 fn generate<T: Token + Debug + 'static>(input_sequence: impl Tokenizeable<T>, grammar: &Grammar<T>)
 -> Vec<BinaryTree<T>> {
-    generate_stacks(input_sequence.tokenize(), grammar)
-        .filter_stacks()
+    generate_contexts(input_sequence.tokenize(), grammar)
+        .filter_contexts()
         .tops()
 }
 
@@ -63,7 +63,7 @@ mod test {
 
     #[test]
     fn test_zero_characters() {
-        let x = generate_stacks("".chars(), &Grammar::expression());
+        let x = generate_contexts("".chars(), &Grammar::expression());
         assert_eq!(1, x.len());
         let x = generate("", &Grammar::expression());
         assert_eq!(0, x.len());
@@ -71,7 +71,7 @@ mod test {
 
     #[test]
     fn test_zero_words() {
-        let x = generate_stacks(vec![].into_iter(), &Grammar::sentence());
+        let x = generate_contexts(vec![].into_iter(), &Grammar::sentence());
         assert_eq!(1, x.len());
         let x = generate(vec![], &Grammar::sentence());
         assert_eq!(0, x.len());
@@ -79,7 +79,7 @@ mod test {
 
     #[test]
     fn test_one_character() {
-        let x = generate_stacks("1".chars(), &Grammar::expression());
+        let x = generate_contexts("1".chars(), &Grammar::expression());
         assert_eq!(1, x.len());
         let x = generate("1", &Grammar::expression());
         assert_eq!(1, x.len());
@@ -87,7 +87,7 @@ mod test {
 
     #[test]
     fn test_one_word() {
-        let x = generate_stacks(vec!["the"].into_iter(), &Grammar::sentence());
+        let x = generate_contexts(vec!["the"].into_iter(), &Grammar::sentence());
         assert_eq!(1, x.len());
         let x = generate(vec!["the"], &Grammar::sentence());
         assert_eq!(1, x.len());
@@ -95,7 +95,7 @@ mod test {
 
     #[test]
     fn test_two_characters() {
-        let x = generate_stacks("-1".chars(), &Grammar::expression());
+        let x = generate_contexts("-1".chars(), &Grammar::expression());
         assert_eq!(3, x.len(), "{x:?}");
         let x = generate("-1", &Grammar::expression());
         assert_eq!(1, x.len(), "{x:?}");
@@ -103,7 +103,7 @@ mod test {
 
     #[test]
     fn test_two_words() {
-        let x = generate_stacks(vec!["the", "cat"].into_iter(), &Grammar::sentence());
+        let x = generate_contexts(vec!["the", "cat"].into_iter(), &Grammar::sentence());
         assert_eq!(2, x.len(), "{x:?}");
         let x = generate(vec!["the", "cat"], &Grammar::sentence());
         assert_eq!(1, x.len(), "{x:?}");

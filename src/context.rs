@@ -3,15 +3,15 @@ use std::{fmt::{Debug, Display}, rc::Rc};
 use crate::{Token, binary_tree::BinaryTree, grammar::Grammar};
 
 #[derive(Clone)]
-pub struct Stack<S: Debug + Clone>(pub Option<Rc<dyn Fn() -> (S, Self)>>);
+pub struct Context<S: Debug + Clone>(pub Option<Rc<dyn Fn() -> (S, Self)>>);
 
-impl<S: Clone + Debug> Default for Stack<S> {
+impl<S: Clone + Debug> Default for Context<S> {
     fn default() -> Self {
         Self(None)
     }
 }
 
-impl<S: Debug + Clone> Debug for Stack<S> {
+impl<S: Debug + Clone> Debug for Context<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             None => write!(f, "Empty"),
@@ -20,9 +20,9 @@ impl<S: Debug + Clone> Debug for Stack<S> {
     }
 }
 
-impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
+impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
     fn push(self: Self, element: BinaryTree<T>) -> Self {
-        Stack(
+        Context(
             Some(Rc::new(
                 move || (element.clone(), self.clone())
             ))
@@ -35,13 +35,13 @@ impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
         grammar: &Grammar<T>,
         mut acc: Vec<Self>) -> Vec<Self> {
         self.0.map_or(
-            acc.clone(), // Empty stack --> return accumulated stacks
+            acc.clone(), // Empty context --> return accumulated contexts
             |ref f| {
                 let (popped, rest) = f();
                 grammar
                 .lookup_nonterminals(&(popped.label(), tree.label()))
                 .map_or(
-                    // No matching nonterminals --> return accumulated stacks
+                    // No matching nonterminals --> return accumulated contexts
                     acc.clone(),
                     |new_nonterminal_labels| {
                         new_nonterminal_labels.iter()
@@ -77,7 +77,7 @@ impl<T: Token + Debug + 'static> Stack<BinaryTree<T>> {
     }
 }
 
-impl Display for Stack<char> {
+impl Display for Context<char> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
@@ -89,22 +89,22 @@ mod test {
 
     #[test]
     fn test_reduce_second_character() {
-        let stack = Stack(Some(
+        let context = Context(Some(
             Rc::new(
                 || (
                     BinaryTree::Terminal {
                         label: "UnOp".to_string(),
                         token: '-',
                     },
-                    Stack(None)
+                    Context(None)
                 )
             )
         ));
-        let x = stack.shift_reduce(BinaryTree::Terminal{ label: "E".to_string(), token: '1' }, &Grammar::expression());
+        let x = context.shift_reduce(BinaryTree::Terminal{ label: "E".to_string(), token: '1' }, &Grammar::expression());
         println!("{x:?}");
         match x[1] {
-            Stack(None) => panic!("Expected a non-empty stack, got empty"),
-            Stack(Some(ref f)) => match f() {
+            Context(None) => panic!("Expected a non-empty context, got empty"),
+            Context(Some(ref f)) => match f() {
                 (ref tree, _) => match tree {
                     BinaryTree::Terminal { label: _, token: _ } => panic!("Expected a nonterminal, got {x:?}"),
                     BinaryTree::Nonterminal { label: _, left: _, right: _ } => (),
@@ -115,26 +115,26 @@ mod test {
 
     #[test]
     fn test_reduce_third_character() {
-        let stack = Stack(Some(
+        let context = Context(Some(
             Rc::new(|| (
                 BinaryTree::Terminal{
                     label: "E".to_string(),
                     token: 'b'
                 },
-                Stack(Some(
+                Context(Some(
                     Rc::new(
                         || (
                             BinaryTree::Terminal{
                                 label: "E".to_string(),
                                 token: 'a'
                             },
-                            Stack(None)
+                            Context(None)
                         )
                     )
                 ))
             ))
         ));
-        let x = stack.shift_reduce( BinaryTree::Terminal{ label: "E".to_string(), token: 'c' }, &Grammar::expression());
+        let x = context.shift_reduce( BinaryTree::Terminal{ label: "E".to_string(), token: 'c' }, &Grammar::expression());
         assert_eq!(1, x.len(), "{x:?}");
     }
 }

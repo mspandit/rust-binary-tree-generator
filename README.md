@@ -26,8 +26,8 @@ $ cargo test
      Running unittests src/main.rs (target/debug/deps/rust_binary_tree_generator-34b116d9e102df5a)
 
 running 11 tests
-test stack::test::test_reduce_third_character ... ok
-test stack::test::test_reduce_second_character ... ok
+test context::test::test_reduce_third_character ... ok
+test context::test::test_reduce_second_character ... ok
 test test::test_zero_characters ... ok
 test test::test_one_character ... ok
 test test::test_one_word ... ok
