@@ -19,21 +19,7 @@ impl<T: Token + Debug + 'static> State<T> {
     pub fn process(self: Self, token: T, grammar: &Grammar<T>) -> Self {
         Self(
             self.0.iter().flat_map(|current_context| {
-                grammar.lookup_terminals(& token).map_or(
-                    Vec::default(),
-                    |t_labels| {
-                        t_labels.iter().flat_map(|terminal_label| {
-                            current_context.clone()
-                                .shift_reduce(
-                                    BinaryTree::Terminal {
-                                        label: terminal_label.clone(),
-                                        token: token.clone()
-                                    },
-                                    grammar
-                                )
-                        }).collect()
-                    }
-                )
+                current_context.shift_reduce(&token, grammar)
             }).collect()
         )
     }

@@ -69,11 +69,22 @@ impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
         )
     }
 
-    pub fn shift_reduce(self: Self, tree: BinaryTree<T>, grammar: &Grammar<T>)
+    pub fn shift_reduce(self: & Self, token: & T, grammar: &Grammar<T>)
     -> Vec<Self> {
-        self
-        .clone()
-        .shift_reduce0(tree.clone(), grammar, vec![self.push(tree)])
+        grammar.lookup_terminals(& token).map_or(
+            Vec::default(),
+            |t_labels| {
+                t_labels.iter().flat_map(|terminal_label| {
+                    let tree = BinaryTree::Terminal {
+                        label: terminal_label.clone(),
+                        token: token.clone()
+                    };
+                    let acc = vec![self.clone().push(tree.clone())];
+                    self.clone().shift_reduce0(tree, grammar, acc)
+                })
+                .collect()
+            }
+        )
     }
 }
 
@@ -100,7 +111,7 @@ mod test {
                 )
             )
         ));
-        let x = context.shift_reduce(BinaryTree::Terminal{ label: "E".to_string(), token: '1' }, &Grammar::expression());
+        let x = context.shift_reduce(&'1', &Grammar::expression());
         println!("{x:?}");
         match x[1] {
             Context(None) => panic!("Expected a non-empty context, got empty"),
@@ -118,15 +129,15 @@ mod test {
         let context = Context(Some(
             Rc::new(|| (
                 BinaryTree::Terminal{
-                    label: "E".to_string(),
-                    token: 'b'
+                    label: "BinOp".to_string(),
+                    token: '+'
                 },
                 Context(Some(
                     Rc::new(
                         || (
                             BinaryTree::Terminal{
                                 label: "E".to_string(),
-                                token: 'a'
+                                token: '1'
                             },
                             Context(None)
                         )
@@ -134,7 +145,7 @@ mod test {
                 ))
             ))
         ));
-        let x = context.shift_reduce( BinaryTree::Terminal{ label: "E".to_string(), token: 'c' }, &Grammar::expression());
+        let x = context.shift_reduce( &'2', &Grammar::expression());
         assert_eq!(1, x.len(), "{x:?}");
     }
 }
