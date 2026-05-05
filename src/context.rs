@@ -34,59 +34,38 @@ impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
     fn shift_reduce0(
         self: Self,
         tree: BinaryTree<T>,
-        grammar: &Grammar<T>,
+        grammar: &Grammar<T, BinaryTree<T>>,
         mut acc: Vec<Self>) -> Vec<Self> {
         self.0.map_or(
             acc.clone(), // Empty context --> return accumulated contexts
             |ref f| {
                 let (popped, rest) = f();
-                grammar
-                .lookup_nonterminals(&(popped.label(), tree.label()))
-                .map_or(
-                    // No matching nonterminals --> return accumulated contexts
-                    acc.clone(),
-                    |new_nonterminal_labels| {
-                        new_nonterminal_labels.iter()
-                        .flat_map(|new_nonterminal_label| {
-                            let new_nonterminal = BinaryTree::Nonterminal {
-                                label: new_nonterminal_label.clone(),
-                                left: Box::new(popped.clone()),
-                                right: Box::new(tree.clone())
-                            };
-                            acc.push(
-                                rest
-                                .clone()
-                                .push(new_nonterminal.clone())
-                            );
-                            rest.clone().shift_reduce0(
-                                new_nonterminal,
-                                grammar,
-                                acc.clone()
-                            )
-                        })
-                        .collect()
-                    }
-                )
-            }
+                grammar.apply_partial((popped.clone(), tree.clone())).iter().flat_map(|new_nonterminal| {
+                    acc.push(
+                        rest
+                        .clone()
+                        .push(new_nonterminal.clone())
+                    );
+                    rest.clone().shift_reduce0(
+                        new_nonterminal.clone(),
+                        grammar,
+                        acc.clone()
+                    )
+                })
+                .collect()}
         )
     }
 
-    pub fn shift_reduce(self: & Self, token: & T, grammar: &Grammar<T>)
+    pub fn shift_reduce(self: & Self, token: & T, grammar: &Grammar<T, BinaryTree<T>>)
     -> Vec<Self> {
-        grammar.lookup_terminals(& token).map_or(
-            Vec::default(),
-            |t_labels| {
-                t_labels.iter().flat_map(|terminal_label| {
-                    let tree = BinaryTree::Terminal {
-                        label: terminal_label.clone(),
-                        token: token.clone()
-                    };
-                    let acc = vec![self.clone().push(tree.clone())];
-                    self.clone().shift_reduce0(tree, grammar, acc)
-                })
-                .collect()
-            }
-        )
+        grammar.apply(& token).iter().flat_map(|terminal| {
+            self.clone().shift_reduce0(
+                terminal.clone(),
+                grammar,
+                vec![self.clone().push(terminal.clone())]
+            )
+        })
+        .collect()
     }
 }
 

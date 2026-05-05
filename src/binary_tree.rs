@@ -1,8 +1,9 @@
 use std::fmt::Display;
+use std::hash::Hash;
 
 use crate::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub enum BinaryTree<T: Token> {
     Terminal { label: String, token: T },
     Nonterminal {
@@ -10,6 +11,25 @@ pub enum BinaryTree<T: Token> {
         left: Box<BinaryTree<T>>,
         right: Box<BinaryTree<T>>
     },
+}
+
+impl<T: Token> PartialEq for BinaryTree<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Terminal { label: l_label, token: _l_token }, Self::Terminal { label: r_label, token: _r_token }) => l_label == r_label,
+            (Self::Nonterminal { label: l_label, left: _l_left, right: _l_right }, Self::Nonterminal { label: r_label, left: _r_left, right: _r_right }) => l_label == r_label,
+            _ => false,
+        }
+    }
+}
+
+impl<T: Token> Hash for BinaryTree<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Terminal { label, token: _ } => label.hash(state),
+            Self::Nonterminal { label, left: _, right: _ } => label.hash(state),
+        }
+    }
 }
 
 impl<T: Token> BinaryTree<T> {

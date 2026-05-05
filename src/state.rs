@@ -16,7 +16,7 @@ impl<T: Token + Debug + 'static> State<T> {
         self.0.len()
     }
 
-    pub fn process(self: Self, token: T, grammar: &Grammar<T>) -> Self {
+    pub fn process(self: Self, token: T, grammar: &Grammar<T, BinaryTree<T>>) -> Self {
         Self(
             self.0.iter().flat_map(|current_context| {
                 current_context.shift_reduce(&token, grammar)

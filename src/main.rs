@@ -26,7 +26,7 @@ impl<'a> Tokenizeable<&'a str> for Vec<&'a str> {
     }
 }
 
-fn generate_contexts<T: Token + Debug + 'static>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T>)
+fn generate_contexts<T: Token + Debug + 'static>(input_sequence: impl Iterator<Item = T>, grammar: &Grammar<T, BinaryTree<T>>)
 -> State<T> {
     input_sequence.fold(
         State::default(),
@@ -36,7 +36,7 @@ fn generate_contexts<T: Token + Debug + 'static>(input_sequence: impl Iterator<I
     )
 }
 
-fn generate<T: Token + Debug + 'static>(input_sequence: impl Tokenizeable<T>, grammar: &Grammar<T>)
+fn generate<T: Token + Debug + 'static>(input_sequence: impl Tokenizeable<T>, grammar: &Grammar<T, BinaryTree<T>>)
 -> Vec<BinaryTree<T>> {
     generate_contexts(input_sequence.tokenize(), grammar)
         .filter_contexts()
