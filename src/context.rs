@@ -1,17 +1,17 @@
-use std::{fmt::{Debug, Display}, rc::Rc};
+use std::{fmt::Debug, rc::Rc};
 
 use crate::{Token, binary_tree::BinaryTree, grammar::Grammar};
 
 #[derive(Clone)]
-pub struct Context<S: Debug + Clone>(pub Option<Rc<dyn Fn() -> (S, Self)>>);
+pub struct Context<S>(pub Option<Rc<dyn Fn() -> (S, Self)>>);
 
-impl<S: Clone + Debug> Default for Context<S> {
+impl<S> Default for Context<S> {
     fn default() -> Self {
         Self(None)
     }
 }
 
-impl<S: Debug + Clone> Debug for Context<S> {
+impl<S> Debug for Context<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             None => write!(f, "Empty"),
@@ -20,15 +20,17 @@ impl<S: Debug + Clone> Debug for Context<S> {
     }
 }
 
-impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
-    fn push(self: Self, element: BinaryTree<T>) -> Self {
+impl<S: Clone + 'static> Context<S> {
+    fn push(self: Self, element: S) -> Self {
         Context(
             Some(Rc::new(
                 move || (element.clone(), self.clone())
             ))
         )
     }
+}
 
+impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
     fn shift_reduce0(
         self: Self,
         tree: BinaryTree<T>,
@@ -85,12 +87,6 @@ impl<T: Token + Debug + 'static> Context<BinaryTree<T>> {
                 .collect()
             }
         )
-    }
-}
-
-impl Display for Context<char> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
     }
 }
 
