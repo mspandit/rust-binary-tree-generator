@@ -1,22 +1,22 @@
-use std::fmt::Debug;
-use crate::{Token, binary_tree::BinaryTree, grammar::Grammar, context::Context};
+use std::{fmt::Debug, hash::Hash};
+use crate::{Token, grammar::Grammar, context::Context};
 
 #[derive(Debug)]
-pub struct State<T: Token + Debug>(Vec<Context<BinaryTree<T>>>);
+pub struct State<S>(Vec<Context<S>>);
 
-impl<T: Token + Debug> Default for State<T> {
+impl<S> Default for State<S> {
     fn default() -> Self {
         Self(vec![Context::default()])
     }
 }
 
-impl<T: Token + Debug + 'static> State<T> {
+impl<S: Clone + Eq + Hash + 'static + Debug> State<S> {
     #[cfg(test)]
     pub fn len(self: & Self) -> usize {
         self.0.len()
     }
 
-    pub fn process(self: Self, token: T, grammar: &Grammar<T, BinaryTree<T>>) -> Self {
+    pub fn process<T: Token>(self: Self, token: T, grammar: & dyn Grammar<T, S>) -> Self {
         Self(
             self.0.iter().flat_map(|current_context| {
                 current_context.shift_reduce(&token, grammar)
@@ -24,7 +24,7 @@ impl<T: Token + Debug + 'static> State<T> {
         )
     }
 
-    pub fn tops(self: Self) -> Vec<BinaryTree<T>> {
+    pub fn tops<T: Token>(self: Self) -> Vec<S> {
         self.0.into_iter().flat_map(|context| context.0.map_or(
             Vec::default(), // Empty context --> return empty vector
             // Non-empty context --> return vector with element

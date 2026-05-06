@@ -1,86 +1,129 @@
-use std::collections::HashMap;
+use std::{fmt::Debug, hash::Hash};
 
-use crate::{Token, binary_tree::BinaryTree};
+use crate::Token;
 
-pub struct Grammar<T: Token, S> {
-    unigrams: HashMap<T, Vec<S>>, // token -> terminal labels
+pub trait Grammar<T: Token, S> {
+     // token -> terminal labels
+    fn apply(&self, token: & T) -> Vec<S>;
     // (left_label, right_label) -> nonterminal labels
-    digrams: HashMap<(S, S), Vec<S>>,
+    fn apply_partial(&self, lr: (S, S)) -> Vec<S>;
 }
 
-impl<T: Token> Grammar<T, BinaryTree<T>> {
-    pub fn apply(&self, token: & T) -> Vec<BinaryTree<T>> {
-        self.unigrams.get(token).iter()
-        .flat_map(|terminals|
-            terminals.iter().map(|terminal| BinaryTree::Terminal {
-                label: terminal.label(),
-                token: token.clone()
-            }
-        ))
-        .collect()
-    }
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Binary(String);
+impl Grammar<char, Binary> for Binary {
+    fn apply(&self, token: & char) -> Vec<Binary> { vec![Binary(format!("{}", token))] }
 
-    pub fn apply_partial(&self, lr: (BinaryTree<T>, BinaryTree<T>)) -> Vec<BinaryTree<T>> {
-        self.digrams.get(& (lr.0.clone(), lr.1.clone())).iter()
-        .flat_map(|nonterminals|
-            nonterminals.iter().map(|nonterminal| BinaryTree::Nonterminal {
-                label: nonterminal.label(),
-                left: Box::new(lr.0.clone()),
-                right: Box::new(lr.1.clone())
-            }
-        ))
-        .collect()
+    fn apply_partial(&self, lr: (Binary, Binary)) -> Vec<Binary> {
+        vec![Binary(format!("({} {})", lr.0 .0, lr.1 .0))]
     }
 }
 
-impl Grammar<char, BinaryTree<char>> {
-    pub fn expression() -> Self {
-        let mut unigrams = HashMap::default();
-        unigrams.insert('1', vec![BinaryTree::Terminal { label: "E".to_string(), token: '1' }]);
-        unigrams.insert('2', vec![BinaryTree::Terminal { label: "E".to_string(), token: '2' }]);
-        unigrams.insert('3', vec![BinaryTree::Terminal { label: "E".to_string(), token: '3' }]);
-        unigrams.insert('4', vec![BinaryTree::Terminal { label: "E".to_string(), token: '4' }]);
-        unigrams.insert('-', vec![
-            BinaryTree::Nonterminal { label: "UnOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: '-' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) },
-            BinaryTree::Nonterminal { label: "BinOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }
-        ]);
-        unigrams.insert('+', vec![BinaryTree::Nonterminal { label: "BinOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }]);
-        unigrams.insert('*', vec![BinaryTree::Nonterminal { label: "BinOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }]);
-        let mut digrams = HashMap::default();
-        digrams.insert((BinaryTree::Nonterminal { label: "UnOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: '-' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }, BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), vec![
-            BinaryTree::Terminal { label: "E".to_string(), token: 'E' }
-        ]);
-        digrams.insert((BinaryTree::Terminal { label: "E".to_string(), token: 'E' }, BinaryTree::Nonterminal { label: "BinOp".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }), vec![
-            BinaryTree::Nonterminal { label: "EBO".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }
-        ]);
-        digrams.insert((BinaryTree::Nonterminal { label: "EBO".to_string(), left: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), right: Box::new(BinaryTree::Terminal { label: "E".to_string(), token: 'E' }) }, BinaryTree::Terminal { label: "E".to_string(), token: 'E' }), vec![
-            BinaryTree::Terminal { label: "E".to_string(), token: 'E' }
-        ]);
-        Self { unigrams, digrams }
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
+enum _UnOp {
+    #[default]
+    Minus,
+}
+
+impl Grammar<char, _UnOp> for _UnOp {
+    fn apply(&self, token: & char) -> Vec<_UnOp> {
+        match token {
+            '-' => vec![_UnOp::Minus],
+            _ => Vec::default()
+        }
+    }
+
+    fn apply_partial(&self, _lr: (_UnOp, _UnOp)) -> Vec<_UnOp> {
+        Vec::default() // No nonterminal rules
     }
 }
 
-impl Grammar<&str, BinaryTree<&str>> {
-    pub fn sentence() -> Self {
-        let mut unigrams = HashMap::default();
-        unigrams.insert("the", vec![BinaryTree::Terminal { label: "Det".to_string(), token: "the" }]);
-        unigrams.insert("cat", vec![BinaryTree::Terminal { label: "N".to_string(), token: "cat" }]);
-        unigrams.insert("sat", vec![BinaryTree::Terminal { label: "V".to_string(), token: "sat" }]);
-        unigrams.insert("on", vec![BinaryTree::Terminal { label: "P".to_string(), token: "on" }]);
-        unigrams.insert("mat", vec![BinaryTree::Terminal { label: "N".to_string(), token: "mat" }]);
-        let mut digrams = HashMap::default();
-        digrams.insert((BinaryTree::Terminal { label: "Det".to_string(), token: "the" }, BinaryTree::Terminal { label: "N".to_string(), token: "cat" }), vec![
-            BinaryTree::Nonterminal { label: "NP".to_string(), left: Box::new(BinaryTree::Terminal { label: "Det".to_string(), token: "the" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "cat" }) }
-        ]);
-        digrams.insert((BinaryTree::Terminal { label: "V".to_string(), token: "sat" }, BinaryTree::Nonterminal { label: "NP".to_string(), left: Box::new(BinaryTree::Terminal { label: "Det".to_string(), token: "the" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "cat" }) }), vec![
-            BinaryTree::Nonterminal { label: "VP".to_string(), left: Box::new(BinaryTree::Terminal { label: "V".to_string(), token: "sat" }), right: Box::new(BinaryTree::Nonterminal { label: "NP".to_string(), left: Box::new(BinaryTree::Terminal { label: "Det".to_string(), token: "the" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "cat" }) }) }
-        ]);
-        digrams.insert((BinaryTree::Terminal { label: "P".to_string(), token: "on" }, BinaryTree::Nonterminal { label: "NP".to_string(), left: Box::new(BinaryTree::Terminal { label: "Det".to_string(), token: "the" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "cat" }) }), vec![
-            BinaryTree::Nonterminal { label: "PP".to_string(), left: Box::new(BinaryTree::Terminal { label: "P".to_string(), token: "on" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "mat" }) }
-        ]);
-        digrams.insert((BinaryTree::Terminal { label: "V".to_string(), token: "sat" }, BinaryTree::Nonterminal { label: "PP".to_string(), left: Box::new(BinaryTree::Terminal { label: "P".to_string(), token: "on" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "mat" }) }), vec![
-            BinaryTree::Nonterminal { label: "VP".to_string(), left: Box::new(BinaryTree::Terminal { label: "V".to_string(), token: "sat" }), right: Box::new(BinaryTree::Nonterminal { label: "PP".to_string(), left: Box::new(BinaryTree::Terminal { label: "P".to_string(), token: "on" }), right: Box::new(BinaryTree::Terminal { label: "N".to_string(), token: "mat" }) }) }
-        ]);
-        Self { unigrams, digrams }
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
+enum _BinOp {
+    #[default]
+    Plus,
+    Minus,
+    Times,
+}
+
+impl Grammar<char, _BinOp> for _BinOp {
+    fn apply(&self, token: & char) -> Vec<_BinOp> {
+        match token {
+            '+' => vec![_BinOp::Plus],
+            '-' => vec![_BinOp::Minus],
+            '*' => vec![_BinOp::Times],
+            _ => Vec::default()
+        }
+    }
+
+    fn apply_partial(&self, _lr: (_BinOp, _BinOp)) -> Vec<_BinOp> {
+        Vec::default() // No nonterminal rules
     }
 }
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct _EBO(Box<_E>, _BinOp);
+
+impl<E: Token> Grammar<E, _EBO> for _EBO {
+    fn apply(&self, _token: & E) -> Vec<_EBO> {
+        Vec::default() // No terminal rules
+    }
+
+    fn apply_partial(&self, _lr: (_EBO, _EBO)) -> Vec<_EBO> {
+        Vec::default() // No nonterminal rules
+    }
+}
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
+enum _E {
+    #[default]
+    Zero,
+    One,
+    Two,
+    Three,
+    Four,
+    UnOp(_UnOp, Box<_E>),
+    BinOp(Box<_E>, _BinOp, Box<_E>),
+}
+
+impl Grammar<char, _E> for _E {
+    fn apply(&self, token: & char) -> Vec<_E> {
+        match token {
+            '0' => vec![_E::Zero],
+            '1' => vec![_E::One],
+            '2' => vec![_E::Two],
+            '3' => vec![_E::Three],
+            '4' => vec![_E::Four],
+            _ => Vec::default()
+        }
+    }
+    fn apply_partial(&self, _lr: (_E, _E)) -> Vec<_E> {
+        todo!()
+    }
+}
+
+// https://people.cs.nott.ac.uk/pszgmh/pearl.pdf p. 1
+type _Parser<Input, Output> = dyn Fn(Input) -> Vec<(Output, Input)>;
+
+// https://people.cs.nott.ac.uk/pszgmh/pearl.pdf p. 2
+fn _pure<Input, Output: Default>() -> Box<_Parser<Input, Output>> {
+    Box::new(|input| vec![(Output::default(), input)])
+}
+
+fn _bind<Input: 'static, OutputA: 'static, OutputB: 'static>(p: Box<_Parser<Input, OutputA>>, f: impl Fn(OutputA) -> Box<_Parser<Input, OutputB>> + 'static) -> Box<_Parser<Input, OutputB>> {
+    Box::new(move |input| {
+        let mut results = Vec::new();
+        for (a, input) in p(input) {
+            results.extend(f(a)(input));
+        }
+        results
+    })
+}
+
+// fn main() {
+//     let item: Box<Parser<String, char>> = Box::new(|input| {
+//         if input.is_empty() {
+//             Vec::default()
+//         } else {
+//             vec![(input.chars().next().unwrap(), input[1..].to_string())]
+//         }
+//     });
+// }
