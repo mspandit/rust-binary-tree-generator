@@ -1,6 +1,6 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
-use crate::grammar::Binary;
+use crate::grammar::BinaryString;
 use crate::{state::State, grammar::Grammar};
 mod context;
 mod state;
@@ -33,25 +33,23 @@ impl Tokenizeable<String> for Vec<String> {
     }
 }
 
-fn generate_contexts<T: Token, S: Clone + Eq + Hash + 'static + Debug>(input_sequence: impl Iterator<Item = T>, grammar: &dyn Grammar<T, S>)
+fn generate_contexts<T: Token + Debug, S: Clone + Debug + 'static, G: Grammar<T, S>>(input_sequence: impl Iterator<Item = T>, grammar: &G)
 -> State<S> {
     input_sequence.fold(
         State::default(),
-        |gen_state, input| {
-            gen_state.process(input, grammar)
-        }
+        |gen_state, input| gen_state.process(& input, grammar)
     )
 }
 
-fn generate<T: Token + Debug + 'static, S: Clone + Eq + Hash + 'static + Debug>(input_sequence: impl Tokenizeable<T>, grammar: &dyn Grammar<T, S>)
+fn generate<T: Token + Debug, S: Clone + Debug + 'static, G: Grammar<T, S>>(input_sequence: impl Tokenizeable<T>, grammar: &G)
 -> Vec<S> {
     generate_contexts(input_sequence.tokenize(), grammar)
-        .filter_contexts()
-        .tops::<T>()
+        .single_contexts()
+        .tops::<T>(grammar)
 }
 
 fn main() {
-    let x = generate("abcdef", &Binary::default());
+    let x = generate("abcdef", &BinaryString::default());
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
@@ -66,29 +64,46 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::grammar::Expression;
+
+use super::*;
 
     #[test]
-    fn test_binary() {
-        let x = generate("a", &Binary::default());
+    fn test_binary1() {
+        let x = generate("a", &BinaryString::default());
         assert_eq!(1, x.len(), "{x:?}");
-        let x = generate("ab", &Binary::default());
+    }
+    #[test]
+    fn test_binary2() {
+        let x = generate("ab", &BinaryString::default());
         assert_eq!(1, x.len(), "{x:?}");
-        let x = generate("abc", &Binary::default());
+    }
+    #[test]
+    fn test_binary3() {
+        let x = generate("abc", &BinaryString::default());
         assert_eq!(2, x.len(), "{x:?}");
-        let x = generate("abcd", &Binary::default());
+    }
+    #[test]
+    fn test_binary4() {
+        let x = generate("abcd", &BinaryString::default());
         assert_eq!(5, x.len(), "{x:?}");
-        let x = generate("abcde", &Binary::default());
+    }
+    #[test]
+    fn test_binary5() {
+        let x = generate("abcde", &BinaryString::default());
         assert_eq!(14, x.len(), "{x:?}");
-        let x = generate("abcdef", &Binary::default());
+    }
+    #[test]
+    fn test_binary6() {
+        let x = generate("abcdef", &BinaryString::default());
         assert_eq!(42, x.len(), "{x:?}");
     }
 
     // #[test]
     // fn test_zero_characters() {
-    //     let x = generate_contexts("".chars(), &Grammar::expression());
+    //     let x = generate_contexts("".chars(), &Expression::default());
     //     assert_eq!(1, x.len());
-    //     let x = generate("", &Grammar::expression());
+    //     let x = generate("", &Expression::default());
     //     assert_eq!(0, x.len());
     // }
 

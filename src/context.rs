@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, rc::Rc};
+use std::{fmt::Debug, rc::Rc};
 
 use crate::{Token, grammar::Grammar};
 
@@ -11,17 +11,17 @@ impl<S> Default for Context<S> {
     }
 }
 
-impl<S> Debug for Context<S> {
+impl<S: Debug> Debug for Context<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
+        match &self.0 {
             None => write!(f, "Empty"),
-            Some(_) => write!(f, "Element()")
+            Some(g) => write!(f, "Element({:?})", g())
         }
     }
 }
 
 impl<S: Clone + 'static> Context<S> {
-    fn push(self: Self, element: S) -> Self {
+    pub fn push(self: Self, element: S) -> Self {
         Context(
             Some(Rc::new(
                 move || (element.clone(), self.clone())
@@ -30,42 +30,11 @@ impl<S: Clone + 'static> Context<S> {
     }
 }
 
-impl<S: Eq + Hash + Clone + 'static + Debug> Context<S> {
-    fn shift_reduce0<T: Token>(
-        self: Self,
-        tree: S,
-        grammar: &dyn Grammar<T, S>,
-        mut acc: Vec<Self>) -> Vec<Self> {
-        self.0.map_or(
-            acc.clone(), // Empty context --> return accumulated contexts
-            |ref f| {
-                let (popped, rest) = f();
-                grammar.apply_partial((popped.clone(), tree.clone())).iter().flat_map(|new_nonterminal| {
-                    println!("Reducing {popped:?} and {tree:?} to {new_nonterminal:?}");
-                    acc.push(
-                        rest
-                        .clone()
-                        .push(new_nonterminal.clone())
-                    );
-                    rest.clone().shift_reduce0(
-                        new_nonterminal.clone(),
-                        grammar,
-                        acc.clone()
-                    )
-                })
-                .collect()}
-        )
-    }
-
+impl<S: Clone + Debug + 'static> Context<S> {
     pub fn shift_reduce<T: Token>(self: & Self, token: & T, grammar: &dyn Grammar<T, S>)
     -> Vec<Self> {
-        grammar.apply(token).iter().flat_map(|terminal| {
-            println!("Processing token {token} with terminal {terminal:?}");
-            self.clone().shift_reduce0(
-                terminal.clone(),
-                grammar,
-                vec![self.clone().push(terminal.clone())]
-            )
+        grammar.apply(token).iter().flat_map(|symbol| {
+            grammar.apply_contextual(self.clone(), symbol.clone())
         })
         .collect()
     }
