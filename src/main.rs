@@ -1,7 +1,7 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
-use crate::grammar::BinaryString;
 use crate::{state::State, grammar::Grammar};
+use crate::grammar::{ContextElement, BinaryString, Expression};
 mod context;
 mod state;
 mod grammar;
@@ -49,7 +49,7 @@ fn generate<T: Token + Debug, S: Clone + Debug + 'static, G: Grammar<T, S>>(inpu
 }
 
 fn main() {
-    let x = generate("abcdef", &BinaryString::default());
+    let x = generate("abcdef", &ContextElement::<BinaryString>::default());
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
@@ -64,48 +64,46 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    use crate::grammar::Expression;
-
-use super::*;
+    use super::*;
 
     #[test]
     fn test_binary1() {
-        let x = generate("a", &BinaryString::default());
+        let x = generate("a", &ContextElement::<BinaryString>::default());
         assert_eq!(1, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary2() {
-        let x = generate("ab", &BinaryString::default());
+        let x = generate("ab", &ContextElement::<BinaryString>::default());
         assert_eq!(1, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary3() {
-        let x = generate("abc", &BinaryString::default());
+        let x = generate("abc", &ContextElement::<BinaryString>::default());
         assert_eq!(2, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary4() {
-        let x = generate("abcd", &BinaryString::default());
+        let x = generate("abcd", &ContextElement::<BinaryString>::default());
         assert_eq!(5, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary5() {
-        let x = generate("abcde", &BinaryString::default());
+        let x = generate("abcde", &ContextElement::<BinaryString>::default());
         assert_eq!(14, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary6() {
-        let x = generate("abcdef", &BinaryString::default());
+        let x = generate("abcdef", &ContextElement::<BinaryString>::default());
         assert_eq!(42, x.len(), "{x:?}");
     }
 
-    // #[test]
-    // fn test_zero_characters() {
-    //     let x = generate_contexts("".chars(), &Expression::default());
-    //     assert_eq!(1, x.len());
-    //     let x = generate("", &Expression::default());
-    //     assert_eq!(0, x.len());
-    // }
+    #[test]
+    fn test_zero_characters() {
+        let x = generate_contexts("".chars(), &ContextElement::<Expression>::default());
+        assert_eq!(1, x.len());
+        let x = generate("", &ContextElement::<Expression>::default());
+        assert_eq!(0, x.len());
+    }
 
     // #[test]
     // fn test_zero_words() {
@@ -115,13 +113,13 @@ use super::*;
     //     assert_eq!(0, x.len());
     // }
 
-    // #[test]
-    // fn test_one_character() {
-    //     let x = generate_contexts("1".chars(), &Grammar::expression());
-    //     assert_eq!(1, x.len());
-    //     let x = generate("1", &Grammar::expression());
-    //     assert_eq!(1, x.len());
-    // }
+    #[test]
+    fn test_one_character() {
+        let x = generate_contexts("1".chars(), &ContextElement::<Expression>::default());
+        assert_eq!(2, x.len());
+        let x = generate("1", &ContextElement::<Expression>::default());
+        assert_eq!(1, x.len());
+    }
 
     // #[test]
     // fn test_one_word() {
@@ -131,13 +129,15 @@ use super::*;
     //     assert_eq!(1, x.len());
     // }
 
-    // #[test]
-    // fn test_two_characters() {
-    //     let x = generate_contexts("-1".chars(), &Grammar::expression());
-    //     assert_eq!(2, x.len(), "{x:?}");
-    //     let x = generate("-1", &Grammar::expression());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_two_characters() {
+        let x = generate_contexts("-1".chars(), &ContextElement::<Expression>::default());
+        assert_eq!(6, x.len(), "{x:?}");
+        let x = generate_contexts("1+".chars(), &ContextElement::<Expression>::default());
+        assert_eq!(3, x.len(), "{x:?}");
+        let x = generate("-1", &ContextElement::<Expression>::default());
+        assert_eq!(1, x.len(), "{x:?}");
+    }
 
     // #[test]
     // fn test_two_words() {
@@ -147,17 +147,17 @@ use super::*;
     //     assert_eq!(1, x.len(), "{x:?}");
     // }
 
-    // #[test]
-    // fn test_three_characters() {
-    //     let x = generate("1+3", &Grammar::expression());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_three_characters() {
+        let x = generate("1+3", &ContextElement::<Expression>::default());
+        assert_eq!(1, x.len(), "{x:?}");
+    }
 
-    // #[test]
-    // fn test_four_characters() {
-    //     let x = generate("-1+2*4", &Grammar::expression());
-    //     assert_eq!(5, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_four_characters() {
+        let x = generate("-1+2*4", &ContextElement::<Expression>::default());
+        assert_eq!(5, x.len(), "{x:?}");
+    }
 
     // #[test]
     // fn test_six_words() {

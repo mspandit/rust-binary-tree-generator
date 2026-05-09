@@ -9,59 +9,80 @@ pub trait Grammar<T: Token, S> {
     fn start(&self, symbol: S) -> bool;
 }
 
-#[derive(Clone)]
-pub enum BinaryString {
-    Complete(String),
-    Partial(Rc<dyn Fn(String) -> Vec<BinaryString>>),
+pub trait Symbol {
+    fn start(&self) -> bool;
 }
 
-// TODO: Instead of passing an instance of the Grammar enum,
-// parameterize functions that use the Grammar.
-impl Default for BinaryString {
-    fn default() -> Self {
-        BinaryString::Complete(String::default())
+pub trait Rule<T, S> {
+    fn terminal(token: & T) -> Vec<ContextElement<S>>;
+    fn nonterminal(left: ContextElement<S>) -> Vec<ContextElement<S>>;
+}
+
+#[derive(Clone, Default)]
+pub struct BinaryString(String);
+
+impl Symbol for BinaryString {
+    fn start(& self) -> bool {
+        true
     }
 }
 
 impl Debug for BinaryString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Clone)]
+pub enum ContextElement<T> {
+    Complete(T),
+    Partial(Rc<dyn Fn(ContextElement<T>) -> Vec<ContextElement<T>>>),
+}
+
+// TODO: Instead of passing an instance of the Grammar enum,
+// parameterize functions that use the Grammar.
+impl<T: Default> Default for ContextElement<T> {
+    fn default() -> Self {
+        ContextElement::Complete(T::default())
+    }
+}
+
+impl<T: Debug> Debug for ContextElement<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BinaryString::Complete(str) => write!(f, "{}", str),
-            BinaryString::Partial(_) => write!(f, "Partial()")
+            ContextElement::Complete(value) => write!(f, "{:?}", value),
+            ContextElement::Partial(_) => write!(f, "Partial()")
         }
     }
 }
 
-impl BinaryString {
-    fn terminal_rule(token: & char) -> BinaryString {
-        BinaryString::Complete(format!("{}", token))
-    }
-    fn nonterminal_rule(left: String) -> impl Fn(String) -> Vec<BinaryString> {
-        move |right| vec![BinaryString::Complete(format!("({} {})", left, right))]
-    }
-
+impl Rule<char, BinaryString> for ContextElement<BinaryString> {
     // Apply terminal rules to a token, returning the output type
-    fn apply_terminal(&self, token: & char) -> Vec<BinaryString> {
-        vec![Self::terminal_rule(token)]
+    fn terminal(token: & char) -> Vec<ContextElement<BinaryString>> {
+        vec![
+            ContextElement::Complete(BinaryString(format!("{}", token)))
+        ]
     }
 
     // Apply nonterminal rules to a complete symbol, returning partial functions
-    fn apply_nonterminal(&self, binary: BinaryString) -> Vec<BinaryString> {
-        match binary {
-            BinaryString::Complete(str) => vec![BinaryString::Partial(Rc::new(Self::nonterminal_rule(str)))],
-            BinaryString::Partial(_) => Vec::default(), // No nonterminal rules apply to partial symbols
-        }
+    fn nonterminal(left: ContextElement<BinaryString>) -> Vec<ContextElement<BinaryString>> {
+        vec![
+            ContextElement::Partial(Rc::new(move |right| vec![
+                ContextElement::Complete(BinaryString(format!("({:?} {:?})", left, right)))
+            ]))
+        ]
     }
 }
 
-impl Grammar<char, BinaryString> for BinaryString {
-    fn apply(&self, token: & char) -> Vec<BinaryString> {
-        let terminal_results = self.apply_terminal(token);
-        let nonterminal_results = terminal_results.iter().flat_map(|t| self.apply_nonterminal(t.clone())).collect();
+impl<T: Token, S: Symbol + Clone + 'static> Grammar<T, ContextElement<S>>
+for ContextElement<S> where ContextElement<S>: Rule<T, S> {
+    fn apply(&self, token: & T) -> Vec<ContextElement<S>> {
+        let terminal_results = Self::terminal(token);
+        let nonterminal_results = terminal_results.iter().flat_map(|t| Self::nonterminal(t.clone())).collect();
         [terminal_results, nonterminal_results].concat()
     }
 
-    fn apply_contextual(&self, context: Context<BinaryString>, new: BinaryString) -> Vec<Context<BinaryString>> {
+    fn apply_contextual(&self, context: Context<ContextElement<S>>, new: ContextElement<S>) -> Vec<Context<ContextElement<S>>> {
         // Apply rule to symbol in context
         match (context.clone().0, new.clone()) {
             (None, _) => {
@@ -71,13 +92,17 @@ impl Grammar<char, BinaryString> for BinaryString {
             (Some(ref f), _) => {
                 let (popped, rest) = f();
                 match (popped, new.clone()) {
-                    (BinaryString::Complete(_), _) => {
+                    (ContextElement::Complete(_), _) => {
                         // Cannot continue on complete context
                         Vec::default()
                     },
-                    (BinaryString::Partial(f), BinaryString::Complete(right)) => {
+                    (ContextElement::Partial(_f1), ContextElement::Partial(_f2)) => {
+                        // Push partial on context awaiting a complete symbol
+                        vec![context.clone().push(new)]
+                    },
+                    (ContextElement::Partial(f), _) => {
                         // Context awaited a complete symbol. Apply it
-                        let new_symbols = f(right.clone());
+                        let new_symbols = f(new);
                         // Recurse on the rest of the context with the new symbol, accumulating results
                         let contextual_results = new_symbols.iter().flat_map(|new_symbol|
                             self.apply_contextual(
@@ -87,7 +112,7 @@ impl Grammar<char, BinaryString> for BinaryString {
                         ).collect::<Vec<_>>();
                         // Recurse on partials started by the new symbol
                         let recursive_results = new_symbols.iter().flat_map(|new_symbol|
-                            self.apply_nonterminal(new_symbol.clone()).iter()
+                            Self::nonterminal(new_symbol.clone()).iter()
                             .flat_map(|new_nonterminal|
                                 self.apply_contextual(
                                     rest.clone(),
@@ -97,81 +122,99 @@ impl Grammar<char, BinaryString> for BinaryString {
                         ).collect::<Vec<_>>();
                         [contextual_results, recursive_results].concat()
                     },
-                    (BinaryString::Partial(_f1), BinaryString::Partial(_f2)) => {
-                        // Push partial on context awaiting a complete symbol
-                        vec![context.clone().push(new)]
-                    }
                 }
             }
         }
     }
 
-    fn start(&self, symbol: BinaryString) -> bool {
+    fn start(&self, symbol: ContextElement<S>) -> bool {
         match symbol {
-            BinaryString::Complete(_) => true,
-            BinaryString::Partial(_) => false
+            ContextElement::Complete(symbol) => symbol.start(),
+            ContextElement::Partial(_) => false
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Expression {
-    Complete(String),
-    Partial(Rc<dyn Fn(String) -> Expression>),
+    UnOp(String),
+    E(String),
+    BinOp(String),
+    EBO(String),
+}
+
+impl Symbol for Expression {
+    fn start(&self) -> bool {
+        match self {
+            Expression::E(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Default for Expression {
     fn default() -> Self {
-        Expression::Complete(String::default())
+        Expression::E(String::default())
     }
 }
 
-impl Expression {
-    fn terminal_rule(token: & char) -> Vec<Expression> {
+impl Rule<char, Expression> for ContextElement<Expression> {
+    fn terminal(token: & char) -> Vec<ContextElement<Expression>> {
         match token {
-            '1' | '2' | '3' | '4' => vec![Expression::Complete(format!("$E({})", token))],
-            '-' => vec![Expression::Complete("$UnOp(-)".to_string()), Expression::Complete("$BinOp(-)".to_string())],
-            '+' => vec![Expression::Complete("$BinOp(+)".to_string())],
-            '*' => vec![Expression::Complete("$BinOp(*)".to_string())],
+            '1' | '2' | '3' | '4' => vec![ContextElement::Complete(Expression::E(format!("{}", token)))],
+            '-' => vec![ContextElement::Complete(Expression::UnOp("-".to_string())), ContextElement::Complete(Expression::BinOp("-".to_string()))],
+            '+' => vec![ContextElement::Complete(Expression::BinOp("+".to_string()))],
+            '*' => vec![ContextElement::Complete(Expression::BinOp("*".to_string()))],
             _ => Vec::default() // No terminal rules
         }
     }
-    // fn nonterminal_rule(left: Expression) -> impl Fn(Expression) -> Expression {
-    //     match left {
-    //         Expression::Complete(str) if str.starts_with("$UnOp") => {
-    //             move |right| Expression::Complete(format!("$E($str {})", right))
-    //         },
-    //         Expression::Complete(str) if str.starts_with("$BinOp") => {
-    //             move |right| Expression::Complete(format!("$E({} {})", str, right))
-    //         },
-    //         _ =>
-    //     move |right| Expression::Complete(format!("({} {})", left, right))
-    // }
-    // Apply terminal rules to a token, returning the output type
-    fn apply_terminal(&self, token: & char) -> Vec<Expression> {
-        Self::terminal_rule(token)
-    }
 
-    // Apply nonterminal rules to a complete symbol, returning partial functions
-    // fn apply_nonterminal(&self, binary: BinaryString) -> Vec<BinaryString> {
-    //     match binary {
-    //         BinaryString::Complete(str) => vec![BinaryString::Partial(Rc::new(Self::nonterminal_rule(str)))],
-    //         BinaryString::Partial(_) => Vec::default(), // No nonterminal rules apply to partial symbols
-    //     }
-    // }
-}
-
-impl Grammar<char, Expression> for Expression {
-    fn apply(&self, token: & char) -> Vec<Expression> {
-        Expression::terminal_rule(token)
-    }
-
-    fn apply_contextual(&self, _context: Context<Expression>, _new: Expression) -> Vec<Context<Expression>> {
-        Vec::default() // No nonterminal rules
-    }
-
-    fn start(&self, _symbol: Expression) -> bool {
-        false // No start symbols
+    fn nonterminal(left: ContextElement<Expression>) -> Vec<ContextElement<Expression>> {
+        match left.clone() {
+            ContextElement::Complete(Expression::UnOp(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    println!("Applying nonterminal rule 1 to {:?} and {:?}", left, right);
+                    match right.clone() {
+                        ContextElement::Complete(Expression::E(_)) => vec![
+                            ContextElement::Complete(Expression::E(format!("{:?} {:?}", left, right.clone())))
+                        ],
+                        _ => vec![]
+                    }}))]
+            },
+            ContextElement::Complete(Expression::E(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    println!("Applying nonterminal rule 2 to {:?} and {:?}", left, right);
+                    match right.clone() {
+                    ContextElement::Complete(Expression::BinOp(_)) => vec![
+                        ContextElement::Complete(Expression::EBO(format!("{:?} {:?}", left, right)))
+                    ],
+                    _ => vec![]
+                }}))]
+            },
+            ContextElement::Complete(Expression::BinOp(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    println!("Applying nonterminal rule 3 to {:?} and {:?}", left, right);
+                    match right.clone() {
+                    ContextElement::Complete(Expression::E(_)) => vec![
+                        ContextElement::Complete(Expression::EBO(format!("{:?} {:?}", left, right.clone())))
+                    ],
+                    _ => vec![]
+                }}))]
+            },
+            ContextElement::Complete(Expression::EBO(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    println!("Applying nonterminal rule 4 to {:?} and {:?}", left, right);
+                    match right.clone() {
+                    ContextElement::Complete(Expression::E(_)) => vec![
+                        ContextElement::Complete(Expression::E(format!("{:?} {:?}", left, right.clone())))
+                    ],
+                    _ => vec![]
+            }}))]
+            },
+            _ => {
+                Vec::default()
+            }
+        }
     }
 }
 
