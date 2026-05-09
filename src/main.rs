@@ -1,7 +1,7 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
 use crate::{state::State, grammar::Grammar};
-use crate::grammar::{ContextElement, BinaryString, Expression};
+use crate::grammar::{ContextElement, BinaryString, Expression, Sentence};
 mod context;
 mod state;
 mod grammar;
@@ -54,17 +54,17 @@ fn main() {
     for t in x {
         println!("{:?}", t);
     }
-    let _word_sequence = vec!["the", "cat", "sat", "on", "the", "mat"].iter().map(|s| s.to_string()).collect::<Vec<String>>();
-    // let x = generate(word_sequence, &Grammar::sentence());
-    // println!("{} trees", x.len());
-    // for t in x {
-    //     println!("{:?}", t);
-    // }
+    let word_sequence = vec!["the", "cat", "sat", "on", "the", "mat"].iter().map(|s| s.to_string()).collect::<Vec<String>>();
+    let x = generate(word_sequence, &ContextElement::<Sentence>::default());
+    println!("{} trees", x.len());
+    for t in x {
+        println!("{:?}", t);
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+use super::*;
 
     #[test]
     fn test_binary1() {
@@ -105,13 +105,13 @@ mod test {
         assert_eq!(0, x.len());
     }
 
-    // #[test]
-    // fn test_zero_words() {
-    //     let x = generate_contexts(vec![].into_iter(), &Grammar::sentence());
-    //     assert_eq!(1, x.len());
-    //     let x = generate(vec![], &Grammar::sentence());
-    //     assert_eq!(0, x.len());
-    // }
+    #[test]
+    fn test_zero_words() {
+        let x = generate_contexts(vec![].into_iter(), &ContextElement::<Sentence>::default());
+        assert_eq!(1, x.len());
+        let x = generate(vec![], &ContextElement::<Sentence>::default());
+        assert_eq!(0, x.len());
+    }
 
     #[test]
     fn test_one_character() {
@@ -121,13 +121,13 @@ mod test {
         assert_eq!(1, x.len());
     }
 
-    // #[test]
-    // fn test_one_word() {
-    //     let x = generate_contexts(vec!["the".to_string()].into_iter(), &Grammar::sentence());
-    //     assert_eq!(1, x.len());
-    //     let x = generate(vec!["the".to_string()], &Grammar::sentence());
-    //     assert_eq!(1, x.len());
-    // }
+    #[test]
+    fn test_one_word() {
+        let x = generate_contexts(vec!["the".to_string()].into_iter(), &ContextElement::<Sentence>::default());
+        assert_eq!(2, x.len());
+        let x = generate(vec!["the".to_string()], &ContextElement::<Sentence>::default());
+        assert_eq!(0, x.len());
+    }
 
     #[test]
     fn test_two_characters() {
@@ -139,13 +139,13 @@ mod test {
         assert_eq!(1, x.len(), "{x:?}");
     }
 
-    // #[test]
-    // fn test_two_words() {
-    //     let x = generate_contexts(vec!["the".to_string(), "cat".to_string()].into_iter(), &Grammar::sentence());
-    //     assert_eq!(2, x.len(), "{x:?}");
-    //     let x = generate(vec!["the".to_string(), "cat".to_string()], &Grammar::sentence());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_two_words() {
+        let x = generate_contexts(vec!["the".to_string(), "cat".to_string()].into_iter(), &ContextElement::<Sentence>::default());
+        assert_eq!(2, x.len(), "{x:?}");
+        let x = generate(vec!["the".to_string(), "cat".to_string()], &ContextElement::<Sentence>::default());
+        assert_eq!(0, x.len(), "{x:?}");
+    }
 
     #[test]
     fn test_three_characters() {
@@ -159,9 +159,9 @@ mod test {
         assert_eq!(5, x.len(), "{x:?}");
     }
 
-    // #[test]
-    // fn test_six_words() {
-    //     let x = generate(vec!["the".to_string(), "cat".to_string(), "sat".to_string(), "on".to_string(), "the".to_string(), "mat".to_string()], &Grammar::sentence());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_six_words() {
+        let x = generate(vec!["the".to_string(), "cat".to_string(), "sat".to_string(), "on".to_string(), "the".to_string(), "mat".to_string()], &ContextElement::<Sentence>::default());
+        assert_eq!(1, x.len(), "{x:?}");
+    }
 }

@@ -135,6 +135,100 @@ for ContextElement<S> where ContextElement<S>: Rule<T, S> {
     }
 }
 
+#[derive(Clone)]
+pub enum Sentence {
+    Det(String),
+    N(String),
+    P(String),
+    V(String),
+    NP(String),
+    PP(String),
+    VP(String),
+    S(String),
+}
+
+impl Debug for Sentence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Sentence::Det(s) | Sentence::N(s) | Sentence::P(s) | Sentence::V(s) | Sentence::NP(s) | Sentence::PP(s) | Sentence::VP(s) | Sentence::S(s) => write!(f, "{}", s)
+        }
+    }
+}
+
+impl Symbol for Sentence {
+    fn start(&self) -> bool {
+        match self {
+            Sentence::S(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Default for Sentence {
+    fn default() -> Self {
+        Sentence::S(String::default())
+    }
+}
+
+impl Rule<String, Sentence> for ContextElement<Sentence> {
+    fn terminal(token: &String) -> Vec<ContextElement<Sentence>> {
+        match token.as_str() {
+            "the" => vec![ContextElement::Complete(Sentence::Det("the".to_string()))],
+            "cat" | "mat" => vec![ContextElement::Complete(Sentence::N(format!("{}", token)))],
+            "sat" => vec![ContextElement::Complete(Sentence::V(format!("{}", token)))],
+            "on" => vec![ContextElement::Complete(Sentence::P(format!("{}", token)))],
+            _ => Vec::default() // No terminal rules
+        }
+    }
+
+    fn nonterminal(left: ContextElement<Sentence>) -> Vec<ContextElement<Sentence>> {
+        match left.clone() {
+            ContextElement::Complete(Sentence::Det(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    match right.clone() {
+                        ContextElement::Complete(Sentence::N(_)) => vec![
+                            ContextElement::Complete(Sentence::NP(format!("({:?} {:?})", left, right)))
+                        ],
+                        _ => vec![]
+                    }}))]
+            },
+            ContextElement::Complete(Sentence::V(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    match right.clone() {
+                    ContextElement::Complete(Sentence::NP(_)) => vec![
+                        ContextElement::Complete(Sentence::VP(format!("({:?} {:?})", left, right)))
+                    ],
+                    ContextElement::Complete(Sentence::PP(_)) => vec![
+                        ContextElement::Complete(Sentence::VP(format!("({:?} {:?})", left, right.clone())))
+                    ],
+                    _ => vec![]
+                }}))]
+            },
+            ContextElement::Complete(Sentence::P(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    match right.clone() {
+                    ContextElement::Complete(Sentence::NP(_)) => vec![
+                        ContextElement::Complete(Sentence::PP(format!("({:?} {:?})", left, right.clone())))
+                    ],
+                    _ => vec![]
+                }}))]
+            },
+            ContextElement::Complete(Sentence::NP(_)) => {
+                vec![ContextElement::Partial(Rc::new(move |right| {
+                    match right.clone() {
+                    ContextElement::Complete(Sentence::VP(_)) => vec![
+                        ContextElement::Complete(Sentence::S(format!("({:?} {:?})", left, right.clone())))
+                    ],
+                    _ => vec![]
+                }}))]
+            },
+            _ => {
+                Vec::default()
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Expression {
     UnOp(String),
@@ -217,97 +311,3 @@ impl Rule<char, Expression> for ContextElement<Expression> {
         }
     }
 }
-
-// #[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
-// enum _UnOp {
-//     #[default]
-//     Minus,
-// }
-
-// impl Grammar<char, _UnOp> for _UnOp {
-//     fn apply(&self, token: & char) -> Vec<_UnOp> {
-//         match token {
-//             '-' => vec![_UnOp::Minus],
-//             _ => Vec::default()
-//         }
-//     }
-// }
-
-// #[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
-// enum _BinOp {
-//     #[default]
-//     Plus,
-//     Minus,
-//     Times,
-// }
-
-// impl Grammar<char, _BinOp> for _BinOp {
-//     fn apply(&self, token: & char) -> Vec<_BinOp> {
-//         match token {
-//             '+' => vec![_BinOp::Plus],
-//             '-' => vec![_BinOp::Minus],
-//             '*' => vec![_BinOp::Times],
-//             _ => Vec::default()
-//         }
-//     }
-// }
-// #[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
-// pub struct _EBO(Box<_E>, _BinOp);
-
-// impl<E: Token> Grammar<E, _EBO> for _EBO {
-//     fn apply(&self, _token: & E) -> Vec<_EBO> {
-//         Vec::default() // No terminal rules
-//     }
-// }
-// #[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
-// enum _E {
-//     #[default]
-//     Zero,
-//     One,
-//     Two,
-//     Three,
-//     Four,
-//     UnOp(_UnOp, Box<_E>),
-//     BinOp(Box<_E>, _BinOp, Box<_E>),
-// }
-
-// impl Grammar<char, _E> for _E {
-//     fn apply(&self, token: & char) -> Vec<_E> {
-//         match token {
-//             '0' => vec![_E::Zero],
-//             '1' => vec![_E::One],
-//             '2' => vec![_E::Two],
-//             '3' => vec![_E::Three],
-//             '4' => vec![_E::Four],
-//             _ => Vec::default()
-//         }
-//     }
-// }
-
-// https://people.cs.nott.ac.uk/pszgmh/pearl.pdf p. 1
-type _Parser<Input, Output> = dyn Fn(Input) -> Vec<(Output, Input)>;
-
-// https://people.cs.nott.ac.uk/pszgmh/pearl.pdf p. 2
-fn _pure<Input, Output: Default>() -> Box<_Parser<Input, Output>> {
-    Box::new(|input| vec![(Output::default(), input)])
-}
-
-fn _bind<Input: 'static, OutputA: 'static, OutputB: 'static>(p: Box<_Parser<Input, OutputA>>, f: impl Fn(OutputA) -> Box<_Parser<Input, OutputB>> + 'static) -> Box<_Parser<Input, OutputB>> {
-    Box::new(move |input| {
-        let mut results = Vec::new();
-        for (a, input) in p(input) {
-            results.extend(f(a)(input));
-        }
-        results
-    })
-}
-
-// fn main() {
-//     let item: Box<Parser<String, char>> = Box::new(|input| {
-//         if input.is_empty() {
-//             Vec::default()
-//         } else {
-//             vec![(input.chars().next().unwrap(), input[1..].to_string())]
-//         }
-//     });
-// }

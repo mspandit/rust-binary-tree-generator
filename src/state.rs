@@ -49,8 +49,6 @@ impl<S: Clone + Debug + 'static> State<S> {
             })
             .collect();
             retval
-        }
-
-        )
+        })
     }
 }
