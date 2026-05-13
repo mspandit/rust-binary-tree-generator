@@ -1,54 +1,60 @@
 use std::fmt::Debug;
-use crate::{Token, grammar::Grammar, context::Context};
+use crate::{context::{Context, Symbol}, grammar::{Grammar, PartialGrammar, Start}};
 
 #[derive(Debug)]
-pub struct State<S>(Vec<Context<S>>);
-
-impl<S> Default for State<S> {
-    fn default() -> Self {
-        Self(vec![Context::default()])
-    }
+pub struct State<T, N>
+where N: 'static {
+    context: Vec<Context<N>>,
+    grammar: PartialGrammar<T, N>,
 }
 
-impl<S: Clone + Debug + 'static> State<S> {
+impl<T, N> State<T, N>
+where T: Debug + Clone + 'static, N: Start<N> + Clone + Debug + 'static {
     #[cfg(test)]
-    pub fn len(self: & Self) -> usize {
-        self.0.len()
+    pub fn len(&self) -> usize {
+        self.context.len()
     }
 
-    pub fn process<T: Token + Debug>(self: Self, token: & T, grammar: & dyn Grammar<T, S>) -> Self {
-        Self(
-            self.0.iter().flat_map(|current_context|
-                current_context.shift_reduce(token, grammar)
-            ).collect()
-        )
+    pub fn new(grammar: Grammar<T, N>) -> Self {
+        Self {
+            context: vec![Context::default()],
+            grammar: PartialGrammar(grammar),
+        }
     }
 
-    pub fn tops<T: Token>(self: Self, grammar: &dyn Grammar<T, S>) -> Vec<S> {
-        self.0.into_iter().flat_map(|context| context.0.map_or(
+    pub fn apply(self: Self, token: & T) -> Self {
+        Self {
+            context: self.context.into_iter().flat_map(|current_context|
+                current_context.apply_token(token, &self.grammar)
+            ).collect(),
+            grammar: self.grammar,
+        }
+    }
+
+    pub fn tops(self: Self) -> Vec<N> {
+        self.context.into_iter().flat_map(|context| context.0.map_or(
             Vec::default(), // Empty context --> return empty vector
-            // Non-empty context --> return vector with element
-            |ref f| if grammar.start(f().0) {
-                vec![f().0]
-            } else {
-                Vec::default()
+            // Non-empty context --> return vector with symbol
+            |ref f| match f().0 {
+                Symbol::Complete(s) if s.start(s.clone()) => vec![s],
+                _ => Vec::default(),
             },
         ))
         .collect()
     }
 
     pub fn single_contexts(self: Self) -> Self {
-        Self({
-            let retval = self.0.into_iter().filter(|context| match context.0 {
+        Self {
+            context: self.context.into_iter().filter(|context| match context.0 {
                 None => false, // Filter out empty contexts
                 Some(ref f) => match f() {
                     (_, Context(None)) => true,
-                    // Filter out contexts with more than one element
+                    // Filter out contexts with more than one symbol
                     (_, Context(Some(_))) => false
                 }
             })
-            .collect();
-            retval
-        })
+            .collect(),
+            grammar: self.grammar,
+        }
     }
 }
