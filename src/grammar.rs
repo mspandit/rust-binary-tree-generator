@@ -1,101 +1,71 @@
 use std::{fmt::Debug, rc::Rc};
 
-type Unary<T, N> = dyn Fn(& T) -> Option<N>;
-type Binary<N> = dyn Fn(& N, & N) -> Option<N>;
+#[derive(Clone)]
+struct Stack<T>(Vec<T>);
 
-#[derive(Default, Clone)]
-pub struct Grammar<T, N> {
-    unary: Vec<Rc<Unary<T, N>>>,
-    binary: Vec<Rc<Binary<N>>>,
-}
-
-impl<T, N> Grammar<T, N> {
-    pub fn new(unary: Vec<Rc<Unary<T, N>>>, binary: Vec<Rc<Binary<N>>>) -> Self {
-        Self {
-            unary,
-            binary,
+impl<T> Stack<T> {
+    pub fn pop(self: & Self) -> Option<(T, Self)> {
+        if let Some(c) = self.0.chars().next() {
+            Some((c, Stack((&self.0[1..]).to_string())))
+        } else {
+            None
         }
     }
-
-    // Apply unary rules to a terminal, returning any number of
-    // nonterminals
-    pub fn apply_unary(&self, token: & T) -> Vec<N> {
-        self.unary.iter()
-        .flat_map(|rule| rule(token))
-        .collect()
-    }
-
-    // Apply binary rules to a pair of nonterminals, returning any number of
-    // nonterminals
-    pub fn apply_binary(self: & Self, left: & N, right: & N) -> Vec<N> {
-        self.binary.iter()
-        .flat_map(|rule| rule(left, right))
-        .collect()
-    }
 }
 
-impl<T, N> Debug for Grammar<T, N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Grammar with {} unary rules and {} binary rules", self.unary.len(), self.binary.len())
-    }
-}
+#[derive(Clone)]
+pub struct Grammar<T, N>(Rc<dyn Fn(& Stack<T>) -> Vec<(N, Stack<T>)>>);
 
-#[derive(Debug)]
-pub struct PartialGrammar<T, N>(pub Grammar<T, N>);
-
-pub type Partial<N> = dyn Fn(& N) -> Vec<N>;
-
-impl<T, N> PartialGrammar<T, N>
-where T: Clone + 'static, N: Clone + 'static {
-    pub fn apply_unary(&self, token: & T) -> Vec<N> {
-        self.0.apply_unary(token)
+impl<T, N> Grammar<T, N>
+where N: Clone + 'static {
+    pub fn or(self, alternative: Self) -> Self {
+        Grammar(Rc::new(move |input: & Stack| {
+            let mut results = (self.0)(input);
+            results.extend((alternative.0)(input));
+            vec![]
+        }))
     }
 
-    pub fn apply_binary(self: & Self, symbols: & Vec<N>)
-    -> Vec<Rc<Partial<N>>> {
-        symbols.iter()
-        .map(|left| {
-            let left = left.clone();
-            let grammar = self.0.clone();
-            Rc::new(
-                move |right: &N| grammar.apply_binary(&left, right)
-            ) as Rc<Partial<N>>
-        })
-        .collect()
+    pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static) -> Grammar<T, U> {
+        Grammar(Rc::new(move |input: & Stack<T>|
+            (self.0)(input)
+            .iter()
+            .fold(
+                vec![],
+                |mut result, (nonterminal, stack)| {
+                    let grammar = (next_f)(nonterminal.clone());
+                    result.extend((grammar.0)(stack));
+                    result
+                }
+            )
+        ))
     }
-}
 
-pub trait Start<S> {
-    fn start(&self, s: S) -> bool;
+    pub fn from(a: N) -> Self {
+        Grammar(Rc::new(move |input: & Stack| vec![
+            (a.clone(), (*input).clone())
+        ]))
+    }
 }
 
 #[derive(Default, Clone)]
 pub struct BinaryString(String);
 
 pub fn binary_string() -> Grammar<char, BinaryString> {
-    let unary = vec![
-        Rc::new(|token: & char|
-            Some(BinaryString(format!("{}", token)))
-        ) as Rc<Unary<char, BinaryString>>
-    ];
-    let binary = vec![
-        Rc::new(|left: & BinaryString, right: & BinaryString|
-            Some(BinaryString(format!("({:?} {:?})", left, right)))
-        ) as Rc<Binary<BinaryString>>
-    ];
-    Grammar::new(unary, binary)
-}
-
-impl Start<BinaryString> for BinaryString {
-    fn start(&self, _: BinaryString) -> bool {
-        true
-    }
-}
-
-impl Debug for BinaryString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
+    let s: Grammar<char, BinaryString> = Grammar(Rc::new(|input|
+        if let Some((c, popped)) = input.pop() {
+            vec![(BinaryString(c.to_string()), popped)]
+        } else {
+            vec![]
+        }
+    ));
+    s.clone().or(
+        s.clone().then(move |l|
+            s.clone().then(move |r|
+                Grammar::from(BinaryString(format!("({:?} {:?})", l, r)))
+            )
+        )
+    )
 }
 
 #[derive(Clone)]
@@ -111,47 +81,62 @@ pub enum Sentence {
 }
 
 pub fn sentence() -> Grammar<String, Sentence> {
-    let unary = vec![
-        Rc::new(|token: & String|
-            match token.as_str() {
-                "the" => Some(Sentence::Det("the".to_string())),
-                "cat" | "mat" => Some(Sentence::N(format!("{}", token))),
-                "sat" => Some(Sentence::V(format!("{}", token))),
-                "on" => Some(Sentence::P(format!("{}", token))),
-                _ => None
+    // Det <-- "the"
+    let det: Grammar<String, Sentence> = Grammar(Rc::new(|input|
+        if let Some((str, popped)) = input.pop() {
+            if str.as_str() == "the" {
+                vec![(Sentence::Det(format!("{str}")), popped)]
+            } else {
+                vec![]
             }
-        ) as Rc<Unary<String, Sentence>>
-    ];
-    let binary = vec![
-        Rc::new(|left: & Sentence, right: & Sentence| match (left, right) {
-            (Sentence::Det(_), Sentence::N(_)) => Some(
-                Sentence::NP(format!("({:?} {:?})", left, right))
-            ),
-            (Sentence::V(_), Sentence::NP(_)) => Some(
-                Sentence::VP(format!("({:?} {:?})", left, right))
-            ),
-            (Sentence::V(_), Sentence::PP(_)) => Some(
-                Sentence::VP(format!("({:?} {:?})", left, right.clone()))
-            ),
-            (Sentence::P(_), Sentence::NP(_)) => Some(
-                Sentence::PP(format!("({:?} {:?})", left, right.clone()))
-            ),
-            (Sentence::NP(_), Sentence::VP(_)) => Some(
-                Sentence::S(format!("({:?} {:?})", left, right.clone()))
-            ),
-            _ => None
-        }) as Rc<Binary<Sentence>>
-     ];
-    Grammar::new(unary, binary)
-}
-
-impl Start<Sentence> for Sentence {
-    fn start(&self, s: Sentence) -> bool {
-        match s {
-            Sentence::S(_) => true,
-            _ => false
+        } else {
+            vec![]
         }
-    }
+    ));
+    // N <-- "cat" | "mat"
+    let n: Grammar<String, Sentence> = Grammar(Rc::new(|input|
+        if let Some((str, popped)) = input.pop() {
+            if str.as_str() == "cat" || str.as_str() == "mat" {
+                vec![(Sentence::N(format!("{str}")), popped)]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    ));
+    // V <-- "sat"
+    let v: Grammar<String, Sentence> = Grammar(Rc::new(|input|
+        if let Some((str, popped)) = input.pop() {
+            if str.as_str() == "sat" {
+                vec![(Sentence::V(format!("{str}")), popped)]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    ));
+    // P <-- "on"
+    let p: Grammar<String, Sentence> = Grammar(Rc::new(|input|
+        if let Some((str, popped)) = input.pop() {
+            if str.as_str() == "on" {
+                vec![(Sentence::P(format!("{str}")), popped)]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    ));
+    // NP <-- Det N
+    let np = det.then(|_| n);
+    // PP <-- P NP
+    let pp = p.then(|_| np);
+    // VP <-- V NP | V PP
+    let vp = v.then(|_| np).or(v.then(|_| pp));
+    // S <-- NP VP
+    np.then(|_| vp)
 }
 
 impl Debug for Sentence {
@@ -164,52 +149,65 @@ impl Debug for Sentence {
 
 #[derive(Clone)]
 pub enum Expression {
-    UnOp(String),
-    E(String),
-    BinOp(String),
-    EBO(String),
+    E(i32),
+    UnOp(char),
+    BinOp(char),
+    EBO(i32, char),
 }
 
 impl Debug for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::UnOp(s) | Expression::E(s) | Expression::BinOp(s) | Expression::EBO(s) => write!(f, "{}", s)
+            Expression::UnOp(s) => write!(f, "{}", s),
+            Expression::E(s) => write!(f, "{}", s),
+            Expression::BinOp(s) => write!(f, "{}", s),
+            Expression::EBO(s, op) => write!(f, "({} {})", s, op)
         }
     }
 }
 
 pub fn expression() -> Grammar<char, Expression> {
-    let unary = vec![
-        Rc::new(|token: & char| match token {
-            '1' | '2' | '3' | '4' => Some(Expression::E(format!("{}", token))),
-            '-' => Some(Expression::UnOp("-".to_string())),
-            '+' => Some(Expression::BinOp("+".to_string())),
-            '*' => Some(Expression::BinOp("*".to_string())),
-            _ => None // No terminal rules
-        }) as Rc<Unary<char, Expression>>
-    ];
-    let binary = vec![
-        Rc::new(|left: & Expression, right: & Expression| match (left, right) {
-            (Expression::UnOp(_), Expression::E(_)) => Some(
-                Expression::E(format!("({:?} {:?})", left, right))
-            ),
-            (Expression::E(_), Expression::BinOp(_)) => Some(
-                Expression::EBO(format!("({:?} {:?})", left, right))
-            ),
-            (Expression::EBO(_), Expression::E(_)) => Some(
-                Expression::E(format!("({:?} {:?})", left, right))
-            ),
-            _ => None
-        }) as Rc<Binary<Expression>>
-     ];
-    Grammar::new(unary, binary)
-}
-
-impl Start<Expression> for Expression {
-    fn start(&self, s: Expression) -> bool {
-        match s {
-            Expression::E(_) => true,
-            _ => false
+    // E <-- 1 | 2 | 3 | 4
+    let num = Grammar(Rc::new(|input|
+        if let Some((c, popped)) = input.pop() {
+            match c {
+                '1' | '2' | '3' | '4' => vec![(Expression::E(c.to_digit(10).unwrap() as i32), popped)],
+                _ => vec![],
+            }
+        } else {
+            vec![]
         }
-    }
+    ));
+    // UnOp <-- '-'
+    let unop = Grammar(Rc::new(|input|
+        if let Some((c, popped)) = input.pop() {
+            if '-' == c {
+                vec![(Expression::UnOp('-'), popped)]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    ));
+    // BinOp <-- '+' | '*' | '-'
+    let binop = Grammar(Rc::new(|input|
+        if let Some((c, popped)) = input.pop() {
+            match c {
+                '+' | '*' | '-' => vec!((Expression::BinOp(c), popped)),
+                _ => vec![]
+            }
+        } else {
+            vec![]
+        }
+    ));
+    // EBO <-- E BinOp
+    let ebo = expression().then(|_| binop);
+    num.or(
+        // E <-- UnOp E
+        unop.then(|_| expression())
+    ).or(
+        // E <-- EBO E
+        ebo.then(|_| expression())
+    )
 }

@@ -1,7 +1,7 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
 use crate::state::State;
-use crate::grammar::{binary_string, expression, Grammar, sentence, Start};
+use crate::grammar::{binary_string, expression, Grammar, sentence};
 mod context;
 mod state;
 mod grammar;
@@ -142,7 +142,7 @@ use super::*;
     #[test]
     fn test_two_characters() {
         let x = generate_contexts("-1".chars(), expression());
-        assert_eq!(3, x.len(), "{x:?}");
+        assert_eq!(4, x.len(), "{x:?}");
         let x = generate_contexts("1+".chars(), expression());
         assert_eq!(3, x.len(), "{x:?}");
         let x = generate("-1", expression());
