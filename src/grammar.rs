@@ -1,12 +1,14 @@
 use std::{fmt::Debug, rc::Rc};
 
-#[derive(Clone)]
-struct Stack<T>(Vec<T>);
+#[derive(Clone, Debug)]
+pub struct Stack<T>(pub Vec<T>)
+where T: Debug;
 
-impl<T> Stack<T> {
-    pub fn pop(self: & Self) -> Option<(T, Self)> {
-        if let Some(c) = self.0.chars().next() {
-            Some((c, Stack((&self.0[1..]).to_string())))
+impl<T> Stack<T>
+where T: Clone + Debug {
+    pub fn pop(mut self: Self) -> Option<(T, Self)> {
+        if let Some(c) = self.0.pop() {
+            Some((c, Stack(self.0)))
         } else {
             None
         }
@@ -14,19 +16,21 @@ impl<T> Stack<T> {
 }
 
 #[derive(Clone)]
-pub struct Grammar<T, N>(Rc<dyn Fn(& Stack<T>) -> Vec<(N, Stack<T>)>>);
+pub struct Grammar<T, N>(Rc<dyn Fn(& Stack<T>) -> Vec<(N, Stack<T>)>>)
+where T: Debug, N: Debug;
 
 impl<T, N> Grammar<T, N>
-where N: Clone + 'static {
-    pub fn or(self, alternative: Self) -> Self {
-        Grammar(Rc::new(move |input: & Stack| {
+where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
+    pub fn or(self, alt: Self) -> Self {
+        Grammar(Rc::new(move |input: & Stack<T>| {
             let mut results = (self.0)(input);
-            results.extend((alternative.0)(input));
+            results.extend((alt.0)(input));
             vec![]
         }))
     }
 
-    pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static) -> Grammar<T, U> {
+    pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static) -> Grammar<T, U>
+    where U: Debug {
         Grammar(Rc::new(move |input: & Stack<T>|
             (self.0)(input)
             .iter()
@@ -42,28 +46,51 @@ where N: Clone + 'static {
     }
 
     pub fn from(a: N) -> Self {
-        Grammar(Rc::new(move |input: & Stack| vec![
+        Grammar(Rc::new(move |input: & Stack<T>| vec![
             (a.clone(), (*input).clone())
         ]))
+    }
+
+    pub fn parse(self: & Self, input: & Stack<T>) -> Vec<(N, Stack<T>)> {
+        println!("Calling parse on {:?}", input);
+        (self.0)(input)
+    }
+}
+
+impl<T, N> Debug for Grammar<T, N>
+where T: Debug, N: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt:: Result {
+        write!(f, "Grammar")
     }
 }
 
 #[derive(Default, Clone)]
 pub struct BinaryString(String);
 
+impl Debug for BinaryString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub fn binary_string() -> Grammar<char, BinaryString> {
     let s: Grammar<char, BinaryString> = Grammar(Rc::new(|input|
-        if let Some((c, popped)) = input.pop() {
-            vec![(BinaryString(c.to_string()), popped)]
+        if let Some((c, popped)) = input.clone().pop() {
+            let retval = vec![(BinaryString(c.to_string()), popped)];
+            println!("Returning {:?} on {:?}", retval, input);
+            retval
         } else {
+            println!("Returning [] on {:?}", input);
             vec![]
         }
     ));
     s.clone().or(
         s.clone().then(move |l|
-            s.clone().then(move |r|
-                Grammar::from(BinaryString(format!("({:?} {:?})", l, r)))
-            )
+            s.clone().then(move |r| {
+                let retval = format!("({:?} {:?})", l, r);
+                println!("Returning {retval}");
+                Grammar::from(BinaryString(retval))
+            })
         )
     )
 }
@@ -83,7 +110,7 @@ pub enum Sentence {
 pub fn sentence() -> Grammar<String, Sentence> {
     // Det <-- "the"
     let det: Grammar<String, Sentence> = Grammar(Rc::new(|input|
-        if let Some((str, popped)) = input.pop() {
+        if let Some((str, popped)) = input.clone().pop() {
             if str.as_str() == "the" {
                 vec![(Sentence::Det(format!("{str}")), popped)]
             } else {
@@ -95,7 +122,7 @@ pub fn sentence() -> Grammar<String, Sentence> {
     ));
     // N <-- "cat" | "mat"
     let n: Grammar<String, Sentence> = Grammar(Rc::new(|input|
-        if let Some((str, popped)) = input.pop() {
+        if let Some((str, popped)) = input.clone().pop() {
             if str.as_str() == "cat" || str.as_str() == "mat" {
                 vec![(Sentence::N(format!("{str}")), popped)]
             } else {
@@ -107,7 +134,7 @@ pub fn sentence() -> Grammar<String, Sentence> {
     ));
     // V <-- "sat"
     let v: Grammar<String, Sentence> = Grammar(Rc::new(|input|
-        if let Some((str, popped)) = input.pop() {
+        if let Some((str, popped)) = input.clone().pop() {
             if str.as_str() == "sat" {
                 vec![(Sentence::V(format!("{str}")), popped)]
             } else {
@@ -119,7 +146,7 @@ pub fn sentence() -> Grammar<String, Sentence> {
     ));
     // P <-- "on"
     let p: Grammar<String, Sentence> = Grammar(Rc::new(|input|
-        if let Some((str, popped)) = input.pop() {
+        if let Some((str, popped)) = input.clone().pop() {
             if str.as_str() == "on" {
                 vec![(Sentence::P(format!("{str}")), popped)]
             } else {
@@ -130,13 +157,17 @@ pub fn sentence() -> Grammar<String, Sentence> {
         }
     ));
     // NP <-- Det N
-    let np = det.then(|_| n);
+    let np = det.then(move |_| n.clone());
+    let np1 = np.clone();
+    let np2 = np.clone();
     // PP <-- P NP
-    let pp = p.then(|_| np);
+    let pp = p.then(move |_| np.clone());
     // VP <-- V NP | V PP
-    let vp = v.then(|_| np).or(v.then(|_| pp));
+    let vp = v.clone().then(move |_| np1.clone()).or(
+        v.clone().then(move |_| pp.clone())
+    );
     // S <-- NP VP
-    np.then(|_| vp)
+    np2.clone().then(move |_| vp.clone())
 }
 
 impl Debug for Sentence {
@@ -166,10 +197,15 @@ impl Debug for Expression {
     }
 }
 
+fn empty<T, N>() -> Grammar<T, N>
+where T: Debug, N: Debug {
+    Grammar(Rc::new(|_| vec![]))
+}
+
 pub fn expression() -> Grammar<char, Expression> {
     // E <-- 1 | 2 | 3 | 4
     let num = Grammar(Rc::new(|input|
-        if let Some((c, popped)) = input.pop() {
+        if let Some((c, popped)) = input.clone().pop() {
             match c {
                 '1' | '2' | '3' | '4' => vec![(Expression::E(c.to_digit(10).unwrap() as i32), popped)],
                 _ => vec![],
@@ -180,7 +216,7 @@ pub fn expression() -> Grammar<char, Expression> {
     ));
     // UnOp <-- '-'
     let unop = Grammar(Rc::new(|input|
-        if let Some((c, popped)) = input.pop() {
+        if let Some((c, popped)) = input.clone().pop() {
             if '-' == c {
                 vec![(Expression::UnOp('-'), popped)]
             } else {
@@ -192,7 +228,7 @@ pub fn expression() -> Grammar<char, Expression> {
     ));
     // BinOp <-- '+' | '*' | '-'
     let binop = Grammar(Rc::new(|input|
-        if let Some((c, popped)) = input.pop() {
+        if let Some((c, popped)) = input.clone().pop() {
             match c {
                 '+' | '*' | '-' => vec!((Expression::BinOp(c), popped)),
                 _ => vec![]
@@ -202,7 +238,13 @@ pub fn expression() -> Grammar<char, Expression> {
         }
     ));
     // EBO <-- E BinOp
-    let ebo = expression().then(|_| binop);
+    let ebo = empty().then(move |_: char| {
+        let binop1 = binop.clone();
+        expression().then(move |_| {
+            binop1.clone()
+        })
+    });
+
     num.or(
         // E <-- UnOp E
         unop.then(|_| expression())

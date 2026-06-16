@@ -1,9 +1,6 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
-use crate::state::State;
-use crate::grammar::{binary_string, expression, Grammar, sentence};
-mod context;
-mod state;
+use crate::grammar::{binary_string, expression, sentence, Stack};
 mod grammar;
 trait Token: Clone + Display + Default + Eq + Hash {}
 
@@ -33,38 +30,21 @@ impl Tokenizeable<String> for Vec<String> {
     }
 }
 
-fn generate_contexts<T, S>(input_sequence: impl Iterator<Item = T>, grammar: Grammar<T, S>)
--> State<T, S>
-where T: Token + Debug + 'static, S: Start<S> + Clone + Debug + 'static {
-    input_sequence.fold(
-        State::new(grammar.clone()),
-        |gen_state, input| {
-            gen_state.apply(& input)
-        }
-    )
-}
 
-fn generate<T, S>(input_sequence: impl Tokenizeable<T>, grammar: Grammar<T, S>)
--> Vec<S>
-where T: Token + Debug + 'static, S: Start<S> + Clone + Debug + 'static {
-    generate_contexts(input_sequence.tokenize(), grammar)
-        .single_contexts()
-        .tops()
-}
 
 fn main() {
-    let x = generate("abcdef", binary_string());
+    let x= binary_string().parse(&Stack("abcdef".to_string().chars().rev().collect()));
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
     }
-    let word_sequence = vec!["the", "cat", "sat", "on", "the", "mat"].iter().map(|s| s.to_string()).collect::<Vec<String>>();
-    let x = generate(word_sequence, sentence());
+    let word_sequence = Stack(vec!["the", "cat", "sat", "on", "the", "mat"].iter().map(|s| s.to_string()).collect::<Vec<String>>());
+    let x = sentence().parse(&word_sequence);
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
     }
-    let x = generate("-1+2*4", expression());
+    let x = expression().parse(& Stack("-1+2*4".to_string().chars().rev().collect()));
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
