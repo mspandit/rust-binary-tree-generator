@@ -24,6 +24,7 @@ where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
     pub fn or(self, alt: Self) -> Self {
         Grammar(Rc::new(move |input: & Stack<T>| {
             let mut results = (self.0)(input);
+            println!("{} line {}: Disjoining...", file!(), line!());
             results.extend((alt.0)(input));
             vec![]
         }))
@@ -31,7 +32,8 @@ where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
 
     pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static) -> Grammar<T, U>
     where U: Debug {
-        Grammar(Rc::new(move |input: & Stack<T>|
+        Grammar(Rc::new(move |input: & Stack<T>| {
+            println!("{} line {}: Sequencing...", file!(), line!());
             (self.0)(input)
             .iter()
             .fold(
@@ -42,7 +44,7 @@ where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
                     result
                 }
             )
-        ))
+        }))
     }
 
     pub fn from(a: N) -> Self {
@@ -73,8 +75,8 @@ impl Debug for BinaryString {
     }
 }
 
-pub fn binary_string() -> Grammar<char, BinaryString> {
-    let s: Grammar<char, BinaryString> = Grammar(Rc::new(|input|
+pub fn binary_string1() -> Grammar<char, BinaryString> {
+    Grammar(Rc::new(|input|
         if let Some((c, popped)) = input.clone().pop() {
             let retval = vec![(BinaryString(c.to_string()), popped)];
             println!("Returning {:?} on {:?}", retval, input);
@@ -83,10 +85,13 @@ pub fn binary_string() -> Grammar<char, BinaryString> {
             println!("Returning [] on {:?}", input);
             vec![]
         }
-    ));
-    s.clone().or(
-        s.clone().then(move |l|
-            s.clone().then(move |r| {
+    ))
+}
+
+pub fn binary_string() -> Grammar<char, BinaryString> {
+    binary_string1().or(
+        binary_string1().then(move |l|
+            binary_string1().then(move |r| {
                 let retval = format!("({:?} {:?})", l, r);
                 println!("Returning {retval}");
                 Grammar::from(BinaryString(retval))
