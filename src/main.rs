@@ -1,6 +1,6 @@
 use std::fmt::{ Debug, Display };
 use std::hash::Hash;
-use crate::grammar::{binary_string, expression, sentence, Stack};
+use crate::grammar::{binary_string, expression, sentence};
 mod grammar;
 trait Token: Clone + Display + Default + Eq + Hash {}
 
@@ -33,18 +33,17 @@ impl Tokenizeable<String> for Vec<String> {
 
 
 fn main() {
-    let x= binary_string().parse(&Stack("abcdef".to_string().chars().rev().collect()));
+    let x= binary_string().parse(&"abcdef".into());
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
     }
-    let word_sequence = Stack(vec!["the", "cat", "sat", "on", "the", "mat"].iter().map(|s| s.to_string()).collect::<Vec<String>>());
-    let x = sentence().parse(&word_sequence);
+    let x = sentence().parse(&vec!["the", "cat", "sat", "on", "the", "mat"].into());
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
     }
-    let x = expression().parse(& Stack("-1+2*4".to_string().chars().rev().collect()));
+    let x = expression().parse(&"-1+2*4".into());
     println!("{} trees", x.len());
     for t in x {
         println!("{:?}", t);
@@ -58,81 +57,81 @@ use super::*;
 
     #[test]
     fn test_binary1() {
-        let x = binary_string().parse(&Stack("a".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"a".into());
         assert_eq!(1, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary2() {
-        let x = binary_string().parse(&Stack("ab".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"ab".into());
         assert_eq!(1, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary3() {
-        let x = binary_string().parse(&Stack("abc".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"abc".into());
         assert_eq!(2, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary4() {
-        let x = binary_string().parse(&Stack("abcd".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"abcd".into());
         assert_eq!(5, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary5() {
-        let x = binary_string().parse(&Stack("abcde".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"abcde".into());
         assert_eq!(14, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary6() {
-        let x = binary_string().parse(&Stack("abcdef".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"abcdef".into());
         assert_eq!(42, x.len(), "{x:?}");
     }
 
     #[test]
     fn test_zero_characters() {
-        let x = binary_string().parse(&Stack("".to_string().chars().rev().collect()));
+        let x = binary_string().parse(&"".into());
         assert_eq!(0, x.len());
     }
 
     #[test]
     fn test_zero_words() {
-        let x = sentence().parse(&Stack(vec![]));
+        let x = sentence().parse(&vec![].into());
         assert_eq!(0, x.len());
     }
 
 
     #[test]
     fn test_one_word() {
-        let x = sentence().parse(&Stack(vec!["the".to_string()]));
+        let x = sentence().parse(&vec!["the"].into());
         assert_eq!(0, x.len());
     }
 
     #[test]
     fn test_two_characters() {
-        let x = expression().parse(&Stack("-1".to_string().chars().rev().collect()));
+        let x = expression().parse(&"-1".into());
         assert_eq!(1, x.len(), "{x:?}");
     }
 
     #[test]
     fn test_two_words() {
-        let x = sentence().parse(&Stack(vec!["cat".to_string(), "the".to_string()]));
+        let x = sentence().parse(&vec!["cat"].into());
         assert_eq!(0, x.len(), "{x:?}");
     }
 
     #[test]
     fn test_three_characters() {
-        let x = expression().parse(&Stack("1+3".to_string().chars().rev().collect()));
+        let x = expression().parse(&"1+3".into());
         assert_eq!(1, x.len(), "{x:?}");
     }
 
     #[test]
     fn test_four_characters() {
-        let x = expression().parse(&Stack("-1+2*4".to_string().chars().rev().collect()));
+        let x = expression().parse(&"-1+2*4".into());
         assert_eq!(5, x.len(), "{x:?}");
     }
 
     #[test]
     fn test_six_words() {
-        let x = sentence().parse(&Stack(vec!["the", "cat", "sat", "on", "the", "mat"].into_iter().map(str::to_string).collect()));
+        let x = sentence().parse(&vec!["the", "cat", "sat", "on", "the", "mat"].into());
         assert_eq!(1, x.len(), "{x:?}");
     }
 }

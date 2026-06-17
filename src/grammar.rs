@@ -15,6 +15,24 @@ where T: Clone + Debug {
     }
 }
 
+impl From<String> for Stack<char> {
+    fn from(value: String) -> Self {
+        Stack(value.chars().rev().collect())
+    }
+}
+
+impl From<&str> for Stack<char> {
+    fn from(value: &str) -> Self {
+        Stack(value.to_string().chars().rev().collect())
+    }
+}
+
+impl From<Vec<&str>> for Stack<String> {
+    fn from(value: Vec<&str>) -> Self {
+        Stack(value.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+    }
+}
+
 #[derive(Clone)]
 pub struct Grammar<T, N>(Rc<dyn Fn(& Stack<T>) -> Vec<(N, Stack<T>)>>)
 where T: Debug, N: Debug;
@@ -257,4 +275,33 @@ pub fn expression() -> Grammar<char, Expression> {
         // E <-- EBO E
         ebo.then(|_| expression())
     )
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test1() {
+        let g = Grammar::<char, String>(
+            Rc::new(
+                |cs| if let Some((c, popped)) = cs.clone().pop() {
+                    vec![(c.to_string(), popped)]
+                } else {
+                    vec![]
+                }
+            )
+        );
+        let x = g.parse(&Stack(vec!['a']));
+        assert_eq!(1, x.len());
+    }
+
+    #[test]
+    fn test2() {
+        let g = Grammar::<char, String>(
+            Rc::new(|_| vec![])
+        );
+        let x = g.parse(&Stack(vec!['a']));
+        assert_eq!(0, x.len());
+    }
 }
