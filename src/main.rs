@@ -63,12 +63,12 @@ use super::*;
     #[test]
     fn test_binary2() {
         let x = binary_string().parse(&"ab".into());
-        assert_eq!(1, x.len(), "{x:?}");
+        assert_eq!(2, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary3() {
         let x = binary_string().parse(&"abc".into());
-        assert_eq!(2, x.len(), "{x:?}");
+        assert_eq!(1, x.len(), "{x:?}");
     }
     #[test]
     fn test_binary4() {

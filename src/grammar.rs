@@ -13,6 +13,10 @@ where T: Clone + Debug {
             None
         }
     }
+
+    pub fn is_empty(self: &Self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl From<String> for Stack<char> {
@@ -39,12 +43,35 @@ where T: Debug, N: Debug;
 
 impl<T, N> Grammar<T, N>
 where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
+    pub fn null() -> Self {
+        Grammar(Rc::new(|_| vec![]))
+    }
+
+    pub fn any_number(self: Self) -> Grammar<T, Vec<N>> {
+        self.clone()
+        .one_or_more()
+        .or(Grammar::from(vec![]))
+    }
+
+    pub fn one_or_more(self: Self) -> Grammar<T, Vec<N>> {
+        self.clone()
+        .then(move |nonterminal |
+            self.clone()
+            .any_number()
+            .then(move |nonterminals| {
+                let mut result = vec![nonterminal.clone()];
+                result.extend(nonterminals);
+                Grammar::from(result)
+            })
+        )
+    }
+
     pub fn or(self, alt: Self) -> Self {
         Grammar(Rc::new(move |input: & Stack<T>| {
             let mut results = (self.0)(input);
             println!("{} line {}: Disjoining...", file!(), line!());
             results.extend((alt.0)(input));
-            vec![]
+            results
         }))
     }
 
@@ -107,15 +134,15 @@ pub fn binary_string1() -> Grammar<char, BinaryString> {
 }
 
 pub fn binary_string() -> Grammar<char, BinaryString> {
-    binary_string1().or(
-        binary_string1().then(move |l|
-            binary_string1().then(move |r| {
+    empty::<char, BinaryString>().then(move |_| binary_string().or(
+        binary_string().then(move |l|
+            binary_string().then(move |r| {
                 let retval = format!("({:?} {:?})", l, r);
                 println!("Returning {retval}");
                 Grammar::from(BinaryString(retval))
             })
         )
-    )
+    ))
 }
 
 #[derive(Clone)]
@@ -303,5 +330,357 @@ mod test {
         );
         let x = g.parse(&Stack(vec!['a']));
         assert_eq!(0, x.len());
+    }
+
+    #[test]
+    fn test3() {
+        let x = binary_string1().parse(&"a".into());
+        assert_eq!(1, x.len());
+        assert_eq!("a".to_string(), x[0].0.0)
+    }
+
+    #[test]
+    fn test4() {
+        let g = binary_string1().then(move |l|
+            binary_string1().then(move |r| {
+                let retval = format!("({:?} {:?})", l, r);
+                println!("Returning {retval}");
+                Grammar::from(BinaryString(retval))
+            })
+        );
+        let x = g.parse(&"ab".into());
+        assert_eq!(1, x.len());
+        assert_eq!("(a b)".to_string(), x[0].0.0)
+    }
+
+    #[test]
+    fn test_or() {
+        let a = Grammar::<char, String>(
+            Rc::new(|cs| if let Some((c, popped)) = cs.clone().pop() {
+                if 'a' == c {
+                    vec![(c.to_string(), popped)]
+                } else {
+                    println!("{} line {}: returning empty", file!(), line!());
+                    vec![]
+                }
+            } else {
+                vec![]
+            })
+        );
+        let b = Grammar::<char, String>(
+            Rc::new(|cs| if let Some((c, popped)) = cs.clone().pop() {
+                if 'b' == c {
+                    vec![(c.to_string(), popped)]
+                } else {
+                    println!("{} line {}: returning empty", file!(), line!());
+                    vec![]
+                }
+            } else {
+                vec![]
+            })
+        );
+        let x = a.clone().or(b.clone()).parse(&"c".into());
+        assert_eq!(0, x.len());
+        let x = a.clone().or(b.clone()).parse(&"a".into());
+        assert_eq!("a".to_string(), x[0].0);
+        let x = a.clone().or(b.clone()).parse(&"b".into());
+        assert_eq!("b".to_string(), x[0].0);
+    }
+
+    #[test]
+    fn test_then() {
+        let a = Grammar::<char, String>(
+            Rc::new(|cs| if let Some((c, popped)) = cs.clone().pop() {
+                if 'a' == c {
+                    vec![(c.to_string(), popped)]
+                } else {
+                    println!("{} line {}: returning empty", file!(), line!());
+                    vec![]
+                }
+            } else {
+                vec![]
+            })
+        );
+        let b = Grammar::<char, String>(
+            Rc::new(|cs| if let Some((c, popped)) = cs.clone().pop() {
+                if 'b' == c {
+                    vec![(c.to_string(), popped)]
+                } else {
+                    println!("{} line {}: returning empty", file!(), line!());
+                    vec![]
+                }
+            } else {
+                vec![]
+            })
+        );
+        let a1 = a.clone();
+        let b1 = b.clone();
+        let x = a1.then(move |_| b1.clone()).parse(&"c".into());
+        assert_eq!(0, x.len());
+        let a2 = a.clone();
+        let b2 = b.clone();
+        let x = a2.then(move |_| b2.clone()).parse(&"ba".into());
+        assert_eq!(0, x.len());
+        let x = a.clone().then(move |l|
+            b.clone().then(move |r|
+                Grammar::from(format!("({l} {r})"))
+            )
+        ).parse(&"ab".into());
+        assert_eq!("(a b)".to_string(), x[0].0);
+    }
+
+    fn item() -> Grammar<char, char> {
+        Grammar(Rc::new(|input| if let Some((c, popped)) = input.clone().pop() {
+                vec![(c, popped)]
+            } else {
+                vec![]
+            }
+        ))
+    }
+
+    fn sat(pred: impl Fn(char) -> bool + 'static) -> Grammar<char, char> {
+        item().then(move |x| {
+            if pred(x) {
+                Grammar::from(x)
+            } else {
+                Grammar::null()
+            }
+        })
+    }
+
+    fn character(c: char) -> Grammar<char, char> {
+        sat(move |x| x == c)
+    }
+
+    fn space() -> Grammar<char, ()> {
+        sat(|c| c.is_whitespace())
+        .any_number()
+        .then(|_whitespace| Grammar::from(()))
+    }
+
+    fn token<N: Clone + Debug + 'static>(g: Grammar<char, N>) -> Grammar<char, N> {
+        space().then(move |_space|
+            g.clone().then(move |tok| {
+                space().then(move |_space|
+                    Grammar::from(tok.clone())
+                )
+            })
+        )
+    }
+
+    fn digit() -> Grammar<char, char> {
+        sat(|c| c.is_ascii_digit())
+    }
+
+    fn nat() -> Grammar<char, i64> {
+        digit()
+        .any_number()
+        .then(|digits| {
+            let n = digits.into_iter()
+            .fold(
+                0,
+                |acc, d|
+                    acc * 10 + d.to_digit(10).unwrap() as i64
+            );
+            Grammar::from(n)
+        })
+    }
+
+    fn int() -> Grammar<char, i64> {
+        character('-').then(|_minus|
+            nat().then(|n|
+                Grammar::from(-n)
+            )
+        ).or(nat())
+    }
+
+    fn integer() -> Grammar<char, i64> {
+        token(int())
+    }
+
+    fn factor() -> Grammar<char, i64> {
+        character('(').then(move |_open|
+            expr().then(|x|
+                character(')').then(move |_close|
+                    Grammar::from(x)
+                )
+            )
+        ).or(integer())
+    }
+
+    fn term() -> Grammar<char, i64> {
+        factor().then(|x|
+            character('*').then(move |_star|
+                term().then(move |y|
+                    Grammar::from(x * y)
+                )
+            )
+        ).or(factor())
+    }
+
+    fn expr() -> Grammar<char, i64> {
+        term().then(move |x|
+            character('+').then(move |_plus|
+                expr().then(move |y|
+                    Grammar::from(x + y)
+                )
+            )
+        ).or(term())
+    }
+
+    #[test]
+    fn test_digit_parse() {
+        assert_eq!(
+            format!("{:?}", digit().parse(&"123".into())),
+            "[('1', Stack(['3', '2']))]"
+        );
+    }
+
+    #[test]
+    fn test_digit_parse_non_digit() {
+        assert_eq!(
+            format!("{:?}", digit().parse(&"abc".into())),
+            "[]"
+        );
+    }
+
+    #[test]
+    fn test_character_parse() {
+        assert_eq!(
+            format!("{:?}", character('a').parse(&"abc".into())),
+            "[('a', Stack(['c', 'b']))]"
+        );
+    }
+
+    #[test]
+    fn test_character_parse_non_char() {
+        assert_eq!(
+            format!("{:?}", character('a').parse(&"123".into())),
+            "[]"
+        );
+    }
+
+    #[test]
+    fn test_digit_star_parse() {
+        let x: Vec<_> = digit()
+        .any_number()
+        .parse(&"123".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(['1', '2', '3'], Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_nat_parse() {
+        let x: Vec<_> = nat()
+        .parse(&"123".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(123, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_integer_parse() {
+        let x: Vec<_> = integer()
+        .parse(&"-42".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(-42, Stack([]))]"
+        )
+    }
+
+    #[test]
+    fn test_factor_parse() {
+        let x: Vec<_> = factor().parse(&"42".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(42, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_term_parse() {
+        let x: Vec<_> = term().parse(&"3*4".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(12, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_expr_parse() {
+        let x: Vec<_> = expr().parse(&"2+3*4".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(14, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_expr_parse_with_parentheses1() {
+        let x: Vec<_> = expr().parse(&"(2+3)*4".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(20, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_expr_parse_with_parentheses2() {
+        let x: Vec<_> = expr().parse(&"(2+(7*10)+8)*20".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(1600, Stack([]))]"
+        );
+    }
+
+    #[test]
+    fn test_expr_parse_fail1() {
+        let x: Vec<_> = expr().parse(&"2+3*".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.0.len() == 1)
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[(5, Stack(['*']))]"
+        );
+    }
+
+    #[test]
+    fn test_expr_parse_fail2() {
+        let x: Vec<_> = expr().parse(&"(2+3".into())
+        .into_iter()
+        .filter(|(_, stack)| stack.is_empty())
+        .collect();
+        assert_eq!(
+            format!("{:?}", x),
+            "[]"
+        );
     }
 }
