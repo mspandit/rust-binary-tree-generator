@@ -33,7 +33,9 @@ impl From<&str> for Stack<char> {
 
 impl From<Vec<&str>> for Stack<String> {
     fn from(value: Vec<&str>) -> Self {
-        Stack(value.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+        Stack(value.iter().map(|s|
+            s.to_string()).collect::<Vec<String>>()
+        )
     }
 }
 
@@ -75,7 +77,8 @@ where N: Clone + Debug + 'static, T: Clone + Debug + 'static {
         }))
     }
 
-    pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static) -> Grammar<T, U>
+    pub fn then<U>(self, next_f: impl Fn(N) -> Grammar<T, U> + 'static)
+    -> Grammar<T, U>
     where U: Debug {
         Grammar(Rc::new(move |input: & Stack<T>| {
             println!("{} line {}: Sequencing...", file!(), line!());
@@ -120,29 +123,25 @@ impl Debug for BinaryString {
     }
 }
 
-pub fn binary_string1() -> Grammar<char, BinaryString> {
-    Grammar(Rc::new(|input|
+fn single() -> Grammar<char, BinaryString> {
+    Grammar::<char, BinaryString>(Rc::new(|input|
         if let Some((c, popped)) = input.clone().pop() {
-            let retval = vec![(BinaryString(c.to_string()), popped)];
-            println!("Returning {:?} on {:?}", retval, input);
-            retval
+            vec![(BinaryString(c.to_string()), popped)]
         } else {
-            println!("Returning [] on {:?}", input);
             vec![]
         }
     ))
 }
 
-pub fn binary_string() -> Grammar<char, BinaryString> {
-    empty::<char, BinaryString>().then(move |_| binary_string().or(
-        binary_string().then(move |l|
-            binary_string().then(move |r| {
-                let retval = format!("({:?} {:?})", l, r);
-                println!("Returning {retval}");
-                Grammar::from(BinaryString(retval))
-            })
+fn double() -> Grammar<char, BinaryString> {
+    single().then(|l| binary_string().then(move |r|
+            Grammar::from(BinaryString(format!("({:?} {:?})", l, r)))
         )
-    ))
+    )
+}
+
+pub fn binary_string() -> Grammar<char, BinaryString> {
+    single().or(double())
 }
 
 #[derive(Clone)]
@@ -223,7 +222,14 @@ pub fn sentence() -> Grammar<String, Sentence> {
 impl Debug for Sentence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Sentence::Det(s) | Sentence::N(s) | Sentence::P(s) | Sentence::V(s) | Sentence::NP(s) | Sentence::PP(s) | Sentence::VP(s) | Sentence::S(s) => write!(f, "{}", s)
+            Sentence::Det(s)
+            | Sentence::N(s)
+            | Sentence::P(s)
+            | Sentence::V(s)
+            | Sentence::NP(s)
+            | Sentence::PP(s)
+            | Sentence::VP(s)
+            | Sentence::S(s) => write!(f, "{}", s)
         }
     }
 }
@@ -330,27 +336,6 @@ mod test {
         );
         let x = g.parse(&Stack(vec!['a']));
         assert_eq!(0, x.len());
-    }
-
-    #[test]
-    fn test3() {
-        let x = binary_string1().parse(&"a".into());
-        assert_eq!(1, x.len());
-        assert_eq!("a".to_string(), x[0].0.0)
-    }
-
-    #[test]
-    fn test4() {
-        let g = binary_string1().then(move |l|
-            binary_string1().then(move |r| {
-                let retval = format!("({:?} {:?})", l, r);
-                println!("Returning {retval}");
-                Grammar::from(BinaryString(retval))
-            })
-        );
-        let x = g.parse(&"ab".into());
-        assert_eq!(1, x.len());
-        assert_eq!("(a b)".to_string(), x[0].0.0)
     }
 
     #[test]
