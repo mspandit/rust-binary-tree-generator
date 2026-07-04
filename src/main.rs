@@ -1,4 +1,4 @@
-use crate::grammar::{noun, noun_phrase, sentence};
+use crate::grammar::{noun, noun_phrase, sentence, expression};
 mod grammar;
 
 fn main() {
@@ -65,13 +65,13 @@ use super::*;
     //     assert_eq!(42, x.len(), "{x:?}");
     // }
 
-    // #[test]
-    // fn test_zero_characters() {
-    //     let x = generate_contexts("".chars(), expression());
-    //     assert_eq!(1, x.len());
-    //     let x = generate("", expression());
-    //     assert_eq!(0, x.len());
-    // }
+    #[test]
+    fn test_zero_characters() {
+        let input = vec![];
+        let x = expression()
+        .parse(& input);
+        assert_eq!(0, x.len());
+    }
 
     // #[test]
     // fn test_zero_words() {

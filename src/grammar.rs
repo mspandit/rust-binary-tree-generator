@@ -1,4 +1,4 @@
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::{Rc, Weak}};
 
 #[derive(Debug, Clone)]
 pub enum ParseResult<T, N> {
@@ -152,6 +152,13 @@ where T: Clone + 'static + Debug, N: Clone + 'static + Debug{
         }
     }
 
+    pub fn recursive(f: impl Fn(Grammar<T, N>) -> Grammar<T, N>) -> Self {
+        Grammar::Shift(Rc::new_cyclic(|weak_self: & Weak<Grammar<T, N>>| {
+            let weak_clone = weak_self.clone();
+            Grammar(Rc::new(f))
+        }))
+    }
+
     pub fn parse(self: Self, input_sequence: & Vec<T>) -> Vec<ParseResult<T, N>> {
         input_sequence.iter().fold(
             match self {
@@ -191,10 +198,6 @@ where N: Clone + 'static + Debug {
             vec![ParseResult::Term(value.clone())]
         }))
     }
-}
-
-pub trait Start<S> {
-    fn start(&self, s: S) -> bool;
 }
 
 #[derive(Clone)]
@@ -298,15 +301,6 @@ pub fn sentence() -> Grammar<String, Sentence> {
             Grammar::from(Sentence::S(format!("({:?} {:?})", np_sym.clone(), vp_sym.clone())))
         })
     })
-}
-
-impl Start<Sentence> for Sentence {
-    fn start(&self, s: Sentence) -> bool {
-        match s {
-            Sentence::S(_) => true,
-            _ => false
-        }
-    }
 }
 
 impl Debug for Sentence {
@@ -414,7 +408,34 @@ fn expr() -> Grammar<char, i64> {
         })
     }).or(term())
 }
-
+fn binop() -> Grammar<char, String> {
+    character('-')
+    .or(character('+'))
+    .or(character('*')).then(|c| c.to_string().into())
+}
+fn ebo() -> Grammar<char, String> {
+    expression().then(|x| binop())
+}
+pub fn expression() -> Grammar<char, String> {
+    Grammar::recursive(|expression| {
+        let ebo = expression.clone().then(|x| binop());
+        let num = character('1')
+        .or(character('2'))
+        .or(character('3'))
+        .or(character('4')).then(|c| Grammar::from(c.to_string()));
+        let unop = character('-');
+        let expression1 = expression.clone();
+        let r = unop
+            .then(move |_c| expression1.clone()
+        )
+        .or(ebo
+        .then(move |_s|
+            expression.clone())
+        );
+        println!("Successfully defined expression().");
+        r
+    })
+}
 #[cfg(test)]
 mod test {
     use super::*;
