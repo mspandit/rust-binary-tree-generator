@@ -1,7 +1,18 @@
-use crate::grammar::{noun, noun_phrase, sentence, expression};
+use crate::grammar::{Gram, noun, noun_phrase, recursive, sentence};
 mod grammar;
 
 fn main() {
+    let factorial = recursive(&|factorial: &Gram<i32, ()>, x| {
+        if *x <= 0 {
+            println!("Blastoff!");
+        } else {
+            println!("Counting down: {}", *x);
+            factorial.apply(&(x - 1));
+        }
+        vec![]
+    });
+    factorial.apply(&3);
+
     let x = noun().parse(& vec!["cat".to_string()]);
     println!("{} trees", x.len());
     for t in x {
@@ -65,28 +76,19 @@ use super::*;
     //     assert_eq!(42, x.len(), "{x:?}");
     // }
 
-    #[test]
-    fn test_zero_characters() {
-        let input = vec![];
-        let x = expression()
-        .parse(& input);
-        assert_eq!(0, x.len());
-    }
-
     // #[test]
-    // fn test_zero_words() {
-    //     let x = generate_contexts(vec![].into_iter(), sentence());
-    //     assert_eq!(1, x.len());
-    //     let x = generate(vec![], sentence());
-    //     assert_eq!(0, x.len());
+    // fn test_zero_characters() {
+    //     let input = vec![];
+    //     let x = expression()
+    //     .parse(& input);
+    //     assert_eq!("[Cont(Grammar::Shift)]", format!("{:?}", x));
     // }
 
     // #[test]
     // fn test_one_character() {
-    //     let x = generate_contexts("1".chars(), expression());
-    //     assert_eq!(2, x.len());
-    //     let x = generate("1", expression());
-    //     assert_eq!(1, x.len());
+    //     let input = vec!['1'];
+    //     let x = expression().parse(& input);
+    //     assert_eq!("[Term(1), Cont(Grammar::Shift)]", format!("{:?}", x));
     // }
 
     // #[test]

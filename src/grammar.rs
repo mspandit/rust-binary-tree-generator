@@ -1,4 +1,4 @@
-use std::{fmt::Debug, rc::{Rc, Weak}};
+use std::{fmt::Debug, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum ParseResult<T, N> {
@@ -27,10 +27,18 @@ impl<T, N> Debug for Grammar<T, N> {
 }
 
 impl<T, N> Grammar<T, N>
-where T: Clone + 'static + Debug, N: Clone + 'static + Debug{
+where T: Clone + 'static + Debug, N: Clone + 'static + Debug {
     // Consumes no input and produces no output
     pub fn null() -> Self {
         Grammar::Reduce(Rc::new(|| vec![]))
+    }
+
+    pub fn apply(self: & Self, token: & T) -> Vec<ParseResult<T, N>> {
+        use Grammar::*;
+        match self {
+            Shift(g) => g(token),
+            Reduce(g) => g(),
+        }
     }
 
     // Kleene star operator. The resulting grammar applies
@@ -102,7 +110,7 @@ where T: Clone + 'static + Debug, N: Clone + 'static + Debug{
     // If a result is a Nonterminal g, then g must be
     // applied to the subsequent input first. g.then(f) is
     // returned as a ParseResult::Nonterminal.
-    pub fn then<F, U>(self: Self, f: F) -> Grammar<T, U>
+    pub fn then<F, U>(self: & Self, f: F) -> Grammar<T, U>
     where F: Fn(N) -> Grammar<T, U> + Clone + 'static,
         U: Clone {
         use Grammar::*;
@@ -152,17 +160,10 @@ where T: Clone + 'static + Debug, N: Clone + 'static + Debug{
         }
     }
 
-    pub fn recursive(f: impl Fn(Grammar<T, N>) -> Grammar<T, N>) -> Self {
-        Grammar::Shift(Rc::new_cyclic(|weak_self: & Weak<Grammar<T, N>>| {
-            let weak_clone = weak_self.clone();
-            Grammar(Rc::new(f))
-        }))
-    }
-
-    pub fn parse(self: Self, input_sequence: & Vec<T>) -> Vec<ParseResult<T, N>> {
+    pub fn parse(self: & Self, input_sequence: & Vec<T>) -> Vec<ParseResult<T, N>> {
         input_sequence.iter().fold(
             match self {
-                    Grammar::Shift(_) => vec![ParseResult::Cont(self)],
+                    Grammar::Shift(_) => vec![ParseResult::Cont(self.clone())],
                     Grammar::Reduce(g) => g(),
             },
             |state, token| {
@@ -186,6 +187,38 @@ where T: Clone + 'static + Debug, N: Clone + 'static + Debug{
             }
         )
     }
+
+    // fn recurse(f: &'static dyn Fn(& Grammar<T, N>) -> Grammar<T, N>, x: &T) -> Vec<ParseResult<T, N>> {
+    //     f(&|y| Grammar::recurse(f, y)).apply(x)
+    // }
+
+    // pub fn recursive(f: &'static dyn Fn(& Grammar<T, N>) -> Grammar<T, N>) -> Grammar<T, N> {
+    //     Grammar::Shift(Rc::new(move |x: &T| Grammar::recurse(f, x)))
+    // }
+}
+
+pub enum Gram<T, N> {
+    Shift(Rc<dyn Fn(& T) -> Vec<ParseResult<T, N>>>),
+    Reduce(Rc<dyn Fn() -> Vec<ParseResult<T, N>>>)
+}
+
+impl<T, N> Gram<T, N>
+where T: 'static, N: 'static {
+    pub fn apply(self: & Self, arg: & T) -> Vec<ParseResult<T, N>> {
+        use Gram::*;
+        match self {
+            Shift(f) => f(arg),
+            _ => vec![]
+        }
+    }
+}
+
+fn recurse<T: 'static, N: 'static>(f: &'static dyn Fn(& Gram<T, N>, & T) -> Vec<ParseResult<T, N>>, x: & T) -> Vec<ParseResult<T, N>> {
+    f(& Gram::Shift(Rc::new(|y: & T| recurse(f, y))), x)
+}
+
+pub fn recursive<T: 'static, N: 'static>(f: &'static dyn Fn(& Gram<T, N>, & T) -> Vec<ParseResult<T, N>>) -> Gram<T, N> {
+    Gram::Shift(Rc::new(move |x: &T| recurse(f, x)))
 }
 
 // Implements the monadic return operator, returning a grammar
@@ -408,34 +441,19 @@ fn expr() -> Grammar<char, i64> {
         })
     }).or(term())
 }
-fn binop() -> Grammar<char, String> {
-    character('-')
-    .or(character('+'))
-    .or(character('*')).then(|c| c.to_string().into())
-}
-fn ebo() -> Grammar<char, String> {
-    expression().then(|x| binop())
-}
-pub fn expression() -> Grammar<char, String> {
-    Grammar::recursive(|expression| {
-        let ebo = expression.clone().then(|x| binop());
-        let num = character('1')
-        .or(character('2'))
-        .or(character('3'))
-        .or(character('4')).then(|c| Grammar::from(c.to_string()));
-        let unop = character('-');
-        let expression1 = expression.clone();
-        let r = unop
-            .then(move |_c| expression1.clone()
-        )
-        .or(ebo
-        .then(move |_s|
-            expression.clone())
-        );
-        println!("Successfully defined expression().");
-        r
-    })
-}
+
+// pub fn expression() -> Grammar<char, i64> {
+//     recursive_g(&|expression: &Grammar<char, i64>, x: char| -> Grammar<char, i64> {
+//         let binop = character('-');
+//         let e1 = expression.clone();
+//         e1.clone().then(move |_| {
+//             let e2 = e1.clone();
+//             binop.clone().then(move |_| {
+//                 e2.clone()
+//             })
+//         })
+//     })
+// }
 #[cfg(test)]
 mod test {
     use super::*;
