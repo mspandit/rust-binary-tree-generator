@@ -1,8 +1,8 @@
-use crate::grammar::{Gram, noun, noun_phrase, recursive, sentence};
+use crate::grammar::{Grammar, noun, noun_phrase, recursive, sentence};
 mod grammar;
 
 fn main() {
-    let factorial = recursive(&|factorial: &Gram<i32, ()>, x| {
+    let countdown = recursive(&|factorial: &Grammar<i32, ()>, x: &i32| {
         if *x <= 0 {
             println!("Blastoff!");
         } else {
@@ -11,7 +11,7 @@ fn main() {
         }
         vec![]
     });
-    factorial.apply(&3);
+    countdown.apply(&3);
 
     let x = noun().parse(& vec!["cat".to_string()]);
     println!("{} trees", x.len());
@@ -43,89 +43,96 @@ fn main() {
 #[cfg(test)]
 mod test {
 
+use crate::grammar::{binary_string, expression};
+
 use super::*;
 
-    // #[test]
-    // fn test_binary1() {
-    //     let x = binary_string().parse(&"a".chars().collect::<Vec<char>>());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
-    // #[test]
-    // fn test_binary2() {
-    //     let x = generate("ab", binary_string());
-    //     assert_eq!(1, x.len(), "{x:?}");
-    // }
-    // #[test]
-    // fn test_binary3() {
-    //     let x = generate("abc", binary_string());
-    //     assert_eq!(2, x.len(), "{x:?}");
-    // }
-    // #[test]
-    // fn test_binary4() {
-    //     let x = generate("abcd", binary_string());
-    //     assert_eq!(5, x.len(), "{x:?}");
-    // }
-    // #[test]
-    // fn test_binary5() {
-    //     let x = generate("abcde", binary_string());
-    //     assert_eq!(14, x.len(), "{x:?}");
-    // }
-    // #[test]
-    // fn test_binary6() {
-    //     let x = generate("abcdef", binary_string());
-    //     assert_eq!(42, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_binary1() {
+        let x = binary_string().parse(&"a".chars().collect::<Vec<char>>());
+        assert_eq!(2, x.len(), "{x:?}");
+    }
+    #[test]
+    fn test_binary2() {
+        let input = "ab".chars().collect();
+        let x = binary_string().parse(&input);
+        assert_eq!(2, x.len(), "{x:?}");
+    }
+    #[test]
+    fn test_binary3() {
+        let input = "abc".chars().collect();
+        let x = binary_string().parse(&input);
+        assert_eq!(2, x.len(), "{x:?}");
+    }
+    #[test]
+    fn test_binary4() {
+        let input = "abcd".chars().collect();
+        let x = binary_string().parse(&input);
+        assert_eq!(5, x.len(), "{x:?}");
+    }
+    #[test]
+    fn test_binary5() {
+        let input = "abcde".chars().collect();
+        let x = binary_string().parse(&input);
+        assert_eq!(14, x.len(), "{x:?}");
+    }
+    #[test]
+    fn test_binary6() {
+        let input = "abcdef".chars().collect();
+        let x = binary_string().parse(&input);
+        assert_eq!(42, x.len(), "{x:?}");
+    }
 
-    // #[test]
-    // fn test_zero_characters() {
-    //     let input = vec![];
-    //     let x = expression()
-    //     .parse(& input);
-    //     assert_eq!("[Cont(Grammar::Shift)]", format!("{:?}", x));
-    // }
+    #[test]
+    fn test_zero_characters() {
+        let input = vec![];
+        let x = expression()
+        .parse(& input);
+        assert_eq!("[Cont(Grammar::Shift)]", format!("{:?}", x));
+    }
 
     // #[test]
     // fn test_one_character() {
     //     let input = vec!['1'];
     //     let x = expression().parse(& input);
-    //     assert_eq!("[Term(1), Cont(Grammar::Shift)]", format!("{:?}", x));
+    //     assert_eq!("[Nonterminal(1), Cont(Grammar::Shift)]", format!("{:?}", x));
     // }
 
-    // #[test]
-    // fn test_one_word() {
-    //     let x = generate_contexts(vec!["the".to_string()].into_iter(), sentence());
-    //     assert_eq!(2, x.len());
-    //     let x = generate(vec!["the".to_string()], sentence());
-    //     assert_eq!(0, x.len());
-    // }
+    #[test]
+    fn test_one_word() {
+        let input = vec!["the".to_string()];
+        let x = sentence().parse(& input);
+        assert_eq!("[Nonterminal(the), Cont(Grammar::Shift)]", format!("{:?}", x));
+    }
 
     // #[test]
     // fn test_two_characters() {
-    //     let x = generate_contexts("-1".chars(), expression());
-    //     assert_eq!(3, x.len(), "{x:?}");
-    //     let x = generate_contexts("1+".chars(), expression());
-    //     assert_eq!(3, x.len(), "{x:?}");
-    //     let x = generate("-1", expression());
-    //     assert_eq!(1, x.len(), "{x:?}");
+    //     let input = "-1".chars().collect();
+    //     let x = expression().parse(& input);
+    //     assert_eq!("[Nonterminal(-1), Cont(Grammar::Shift)]", format!("{:?}", x));
+    //     let input = "1+".chars().collect();
+    //     let x = expression().parse(& input);
+    //     assert_eq!("[Nonterminal(1), Cont(Grammar::Shift)]", format!("{:?}", x));
     // }
 
-    // #[test]
-    // fn test_two_words() {
-    //     let x = generate_contexts(vec!["the".to_string(), "cat".to_string()].into_iter(), sentence());
-    //     assert_eq!(3, x.len(), "{x:?}");
-    //     let x = generate(vec!["the".to_string(), "cat".to_string()], sentence());
-    //     assert_eq!(0, x.len(), "{x:?}");
-    // }
+    #[test]
+    fn test_two_words() {
+        let input = vec!["the".to_string(), "cat".to_string()];
+        let x = sentence().parse(&input);
+        assert_eq!("[Nonterminal(the), Nonterminal(cat), Cont(Grammar::Shift)]", format!("{:?}", x));
+    }
 
     // #[test]
     // fn test_three_characters() {
-    //     let x = generate("1+3", expression());
+    //     let input = "1+3".chars().collect();
+    //     let x = expression().parse(& input);
     //     assert_eq!(1, x.len(), "{x:?}");
     // }
 
     // #[test]
     // fn test_four_characters() {
-    //     let x = generate("-1+2*4", expression());
+    //     let input = "-1+2*4".chars().collect();
+    //     let x = expression().parse(& input);
     //     assert_eq!(5, x.len(), "{x:?}");
     // }
 
