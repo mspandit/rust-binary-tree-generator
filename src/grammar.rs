@@ -1,39 +1,56 @@
 use std::{fmt::Debug, rc::Rc};
 
-#[derive(Debug, Clone)]
-pub enum ParseResult<T, N> {
-    Nonterminal(N),
-    Cont(Grammar<T, N>),
-}
-
-#[derive(Clone)]
 pub enum Grammar<T, N> {
-    Shift(Rc<dyn Fn(& T) -> Vec<ParseResult<T, N>>>),
-    Reduce(Rc<dyn Fn() -> Vec<ParseResult<T, N>>>),
-}
-
-impl<T, N> Debug for Grammar<T, N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Grammar::Shift(_) => write!(f, "Grammar::Shift"),
-            Grammar::Reduce(_) => write!(f, "Grammar::Reduce"),
-        }
-    }
+    Nonterminal(N),
+    Continuation(Rc<dyn Fn(& T) -> Vec<Grammar<T, N>>>),
 }
 
 impl<T, N> Grammar<T, N>
 where T: Clone + 'static + Debug, N: Clone + 'static + Debug {
-    // Consumes no input and produces no output
-    pub fn null() -> Self {
-        Grammar::Reduce(Rc::new(|| vec![]))
-    }
-
-    pub fn apply(self: & Self, token: & T) -> Vec<ParseResult<T, N>> {
+    pub fn apply(self: & Self, token: & T) -> Vec<Grammar<T, N>> {
         use Grammar::*;
         match self {
-            Shift(g) => g(token),
-            Reduce(g) => g(),
+            Nonterminal(_) => vec![],
+            Continuation(own_f) => own_f(token),
         }
+    }
+
+    // A _choice_ operator. The resulting grammar applies
+    // self and other to the input, and returns both results.
+    pub fn or(self: Self, other: Self) -> Self {
+        Grammar::Continuation(Rc::new(move |input: & T| {
+            let mut results = self.apply(input);
+            results.extend(other.apply(input));
+            results
+        }))
+    }
+
+    // A _sequence_ operator. The resulting grammar applies
+    // self to an input to give a list of results.
+    //
+    // If a result is a Nonterminalinal n, then f(n) returns a
+    // grammar to be applied to a subsequent input. It
+    // is returned as a ParseResult::Nonterminal.
+    //
+    // If a result is a Nonterminal g, then g must be
+    // applied to the subsequent input first. g.then(f) is
+    // returned as a ParseResult::Nonterminal.
+    pub fn then<F, U>(self: & Self, f: F) -> Grammar<T, U>
+    where F: Fn(N) -> Grammar<T, U> + Clone + 'static,
+        U: Clone {
+        use Grammar::*;
+        let self_clone = self.clone();
+        Continuation(Rc::new(move |token: & T| {
+            self_clone.apply(token).iter().flat_map(
+                |own_f_res| {
+                    match own_f_res {
+                        Continuation(_) => vec![own_f_res.then(f.clone())],
+                        Nonterminal(n) => vec![f(n.clone())],
+                    }
+                }
+            )
+            .collect()
+        }))
     }
 
     // Kleene star operator. The resulting grammar applies
@@ -59,137 +76,43 @@ where T: Clone + 'static + Debug, N: Clone + 'static + Debug {
         )
     }
 
-    // A _choice_ operator. The resulting grammar applies
-    // self and other to the input, and returns both results.
-    pub fn or(self: Self, other: Self) -> Self {
+    pub fn parse(self: & Self, input_sequence: & Vec<T>) -> Vec<Grammar<T, N>> {
         use Grammar::*;
-        match (self.clone(), other.clone()) {
-            (Shift(self_0), Shift(other_0)) => Shift(
-                Rc::new(move |input: & T| {
-                    let mut results = (self_0)(input);
-                    results.extend((other_0)(input));
-                    results
+        match self {
+            Nonterminal(_) => vec![self.clone()],
+            Continuation(_) => input_sequence.iter().fold(
+                vec![self.clone()],
+                |state, token| {
+                    state.into_iter()
+                    .flat_map(|context| match context {
+                        Nonterminal(_) => vec![],
+                        Continuation(g) => g(token)
+                    })
+                    .collect()
                 }
-            )),
-            (Shift(_), Reduce(other_0)) => Reduce(
-                Rc::new(move || {
-                    let mut results = vec![ParseResult::Cont(self.clone())];
-                    results.extend((other_0)());
-                    results
-                }
-            )),
-            (Reduce(self_0), Shift(_)) => Reduce(
-                Rc::new(move || {
-                    let mut results = (self_0)();
-                    results.push(ParseResult::Cont(other.clone()));
-                    results
-                }
-            )),
-            (Reduce(self_0), Reduce(other_0)) => Reduce(
-                Rc::new(move || {
-                    let mut results = (self_0)();
-                    results.extend((other_0)());
-                    results
-                }
-            )),
+            )
         }
-    }
-
-    // A _sequence_ operator. The resulting grammar applies
-    // self to an input to give a list of results.
-    //
-    // If a result is a Nonterminalinal n, then f(n) returns a
-    // grammar to be applied to a subsequent input. It
-    // is returned as a ParseResult::Nonterminal.
-    //
-    // If a result is a Nonterminal g, then g must be
-    // applied to the subsequent input first. g.then(f) is
-    // returned as a ParseResult::Nonterminal.
-    pub fn then<F, U>(self: & Self, f: F) -> Grammar<T, U>
-    where F: Fn(N) -> Grammar<T, U> + Clone + 'static,
-        U: Clone {
-        use Grammar::*;
-        match self.clone() {
-            Shift(self_0) => Shift(Rc::new(move |input: & T| {
-                (self_0)(input)
-                .iter()
-                .flat_map(
-                    |result| {
-                        match result {
-                            ParseResult::Cont(g) => vec![
-                                ParseResult::Cont(g.clone().then(f.clone()))
-                            ],
-                            ParseResult::Nonterminal(n) => {
-                                let g = f(n.clone());
-                                match g.clone() {
-                                    Shift(_) => vec![ParseResult::Cont(g)],
-                                    Reduce(g_0) => g_0(),
-                                }
-                            },
-                        }
-                    }
-                )
-                .collect()
-            })),
-            Reduce(self_0) => Reduce(Rc::new(move || {
-                self_0()
-                .iter()
-                .flat_map(
-                    |result| {
-                        match result {
-                            ParseResult::Cont(g) => vec![
-                                ParseResult::Cont(g.clone().then(f.clone()))
-                            ],
-                            ParseResult::Nonterminal(n) => {
-                                let g = f(n.clone());
-                                match g.clone() {
-                                    Shift(_) => vec![ParseResult::Cont(g)],
-                                    Reduce(g_0) => g_0()
-                                }
-                            },
-                        }
-                    }
-                )
-                .collect()
-            })),
-        }
-    }
-
-    pub fn parse(self: & Self, input_sequence: & Vec<T>) -> Vec<ParseResult<T, N>> {
-        input_sequence.iter().fold(
-            match self {
-                    Grammar::Shift(_) => vec![ParseResult::Cont(self.clone())],
-                    Grammar::Reduce(g) => g(),
-            },
-            |state, token| {
-                state.into_iter().flat_map(|context|
-                    match context {
-                        ParseResult::Nonterminal(_) => {
-                            vec![]
-                        },
-                        ParseResult::Cont(g) => {
-                            use Grammar::*;
-                            match g {
-                                Shift(ref g_0) => {
-                                    (g_0)(token)
-                                },
-                                Reduce(_) => unreachable!("Grammar::Reduce not implemented"),
-                            }
-                        },
-                    }
-                )
-                .collect()
-            }
-        )
     }
 }
 
-fn recurse<T: 'static, N: 'static>(f: &'static dyn Fn(& Grammar<T, N>, & T) -> Vec<ParseResult<T, N>>, x: & T) -> Vec<ParseResult<T, N>> {
-    f(& Grammar::Shift(Rc::new(|y: & T| recurse(f, y))), x)
+impl<T, N> Clone for Grammar<T, N>
+where N: Clone {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Nonterminal(n) => Self::Nonterminal(n.clone()),
+            Self::Continuation(f) => Self::Continuation(f.clone()),
+        }
+    }
 }
 
-pub fn recursive<T: 'static, N: 'static>(f: &'static dyn Fn(& Grammar<T, N>, & T) -> Vec<ParseResult<T, N>>) -> Grammar<T, N> {
-    Grammar::Shift(Rc::new(move |x: &T| recurse(f, x)))
+impl<T, N> Debug for Grammar<T, N>
+where N: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Grammar::Continuation(_) => write!(f, "Continuation"),
+            Grammar::Nonterminal(n) => write!(f, "Nonterminal({n:?})"),
+        }
+    }
 }
 
 // Implements the monadic return operator, returning a grammar
@@ -198,11 +121,16 @@ pub fn recursive<T: 'static, N: 'static>(f: &'static dyn Fn(& Grammar<T, N>, & T
 impl<T, N> From<N> for Grammar<T, N>
 where N: Clone + 'static + Debug {
     fn from(value: N) -> Self {
-        Grammar::Reduce(Rc::new(move || {
-            println!("{} line {}: returning {:?}", file!(), line!(), value);
-            vec![ParseResult::Nonterminal(value.clone())]
-        }))
+        Grammar::Nonterminal(value.clone())
     }
+}
+
+fn recurse<T: 'static, N: 'static>(f: &'static dyn Fn(& Grammar<T, N>, & T) -> Vec<Grammar<T, N>>, x: & T) -> Vec<Grammar<T, N>> {
+    f(& Grammar::Continuation(Rc::new(|y: & T| recurse(f, y))), x)
+}
+
+pub fn recursive<T: 'static, N: 'static>(f: &'static dyn Fn(& Grammar<T, N>, & T) -> Vec<Grammar<T, N>>) -> Grammar<T, N> {
+    Grammar::Continuation(Rc::new(move |x: &T| recurse(f, x)))
 }
 
 #[derive(Clone)]
@@ -218,16 +146,16 @@ pub enum Sentence {
 }
 
 pub fn noun() -> Grammar<String, Sentence> {
-    let cat = Grammar::Shift(Rc::new(|token: & String|
+    let cat = Grammar::Continuation(Rc::new(|token: & String|
         if token.as_str() == "cat" {
-            vec![ParseResult::Nonterminal(Sentence::N(token.clone()))]
+            vec![Grammar::Nonterminal(Sentence::N(token.clone()))]
         } else {
             vec![]
         }
     ));
-    let mat = Grammar::Shift(Rc::new(|token: & String|
+    let mat = Grammar::Continuation(Rc::new(|token: & String|
         if token.as_str() == "mat" {
-            vec![ParseResult::Nonterminal(Sentence::N(token.clone()))]
+            vec![Grammar::Nonterminal(Sentence::N(token.clone()))]
         } else {
             vec![]
         }
@@ -236,9 +164,9 @@ pub fn noun() -> Grammar<String, Sentence> {
 }
 
 pub fn noun_phrase() -> Grammar<String, Sentence> {
-    let det = Grammar::Shift(Rc::new(|token: & String|
+    let det = Grammar::Continuation(Rc::new(|token: & String|
         if token.as_str() == "the" {
-            vec![ParseResult::Nonterminal(Sentence::Det(token.clone()))]
+            vec![Grammar::Nonterminal(Sentence::Det(token.clone()))]
         } else {
             vec![]
         }
@@ -254,16 +182,16 @@ pub fn noun_phrase() -> Grammar<String, Sentence> {
 }
 
 pub fn sentence() -> Grammar<String, Sentence> {
-    let v = Grammar::Shift(Rc::new(|token: & String|
+    let v = Grammar::Continuation(Rc::new(|token: & String|
         if token.as_str() == "sat" {
-            vec![ParseResult::Nonterminal(Sentence::V(token.clone()))]
+            vec![Grammar::Nonterminal(Sentence::V(token.clone()))]
         } else {
             vec![]
         }
     ));
-    let p = Grammar::Shift(Rc::new(|token: & String|
+    let p = Grammar::Continuation(Rc::new(|token: & String|
         if token.as_str() == "on" {
-            vec![ParseResult::Nonterminal(Sentence::P(token.clone()))]
+            vec![Grammar::Nonterminal(Sentence::P(token.clone()))]
         } else {
             vec![]
         }
@@ -317,19 +245,19 @@ impl Debug for Sentence {
 }
 
 fn item() -> Grammar<char, char> {
-    Grammar::Shift(Rc::new(|input: &char| {
-        vec![ParseResult::Nonterminal(*input)]
+    Grammar::Continuation(Rc::new(|input: &char| {
+        vec![Grammar::Nonterminal(*input)]
     }))
 }
 
 fn sat(p: impl Fn(char) -> bool + 'static + Clone) -> Grammar<char, char> {
-    item().then(move |x| {
-        if p(x) {
-            Grammar::<char, char>::from(x)
+    Grammar::Continuation(Rc::new(move |input: &char| {
+        if p(*input) {
+            vec![Grammar::Nonterminal(*input)]
         } else {
-            Grammar::null()
+            vec![]
         }
-    })
+    }))
 }
 
 pub fn digit() -> Grammar<char, char> {
@@ -469,6 +397,93 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_simple_grammar1() {
+        let g: Grammar<char, char> = Grammar::Nonterminal('a');
+        let x = g.parse(&vec![]);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal('a')));
+    }
+
+    #[test]
+    fn test_simple_grammar2() {
+        let g: Grammar<char, char> = Grammar::Nonterminal('b');
+        let x = g.parse(&vec![]);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal('b')));
+    }
+
+    #[test]
+    fn test_simple_grammar3() {
+        let g: Grammar<char, char> = Grammar::Continuation(Rc::new(|t| if 'c' == *t {
+            vec![Grammar::Nonterminal('c')]
+        } else {
+            vec![]
+        }));
+        let x = g.parse(&vec!['c']);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal('c')));
+    }
+
+    #[test]
+    fn test_item() {
+        let g = item();
+        let x = g.parse(&vec!['a']);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal('a')));
+    }
+
+    #[test]
+    fn test_item_then() {
+        let g = item().then(|c| {
+            assert_eq!(c, 'a');
+            Grammar::from("success")
+        });
+        let x = g.parse(&vec!['a']);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal("success")));
+    }
+
+    #[test]
+    fn test_item_then_item_then1() {
+        let g = item()
+        .then(|c1| {
+            item()
+            .then(move |c2| {
+                assert_eq!(c1, 'a');
+                assert_eq!(c2, 'b');
+                Grammar::from("success")
+            })
+        });
+        let x = g.parse(&vec!['a', 'b']);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal("success")));
+    }
+
+    #[test]
+    fn test_item_then_item_then2() {
+        let g = item()
+        .then(|c1| {
+            assert_eq!(c1, 'a');
+            item()
+        })
+        .then(|c2| {
+            assert_eq!(c2, 'b');
+            Grammar::from("success")
+        });
+        let x = g.parse(&vec!['a', 'b']);
+        assert_eq!(x.len(), 1);
+        assert!(matches!(x[0], Grammar::Nonterminal("success")));
+    }
+
+    #[test]
+    fn test_sat() {
+        let g = sat(|c| c == 'a');
+        let x = g.parse(&vec!['b']);
+        println!("{:?}", x);
+        assert_eq!(x.len(), 0);
+    }
+
+    #[test]
     fn test_digit_parse() {
         assert_eq!(
             format!("{:?}", digit().parse(&vec!['1'])),
@@ -522,8 +537,12 @@ mod test {
     }
     #[test]
     fn test_character_then_parse() {
+        let g = character('a')
+        .then(|_| character('b')
+            .then(|_| Grammar::from("success"))
+        );
         assert_eq!(
-            format!("{:?}", character('a').then(|_| character('a')).then(|_| Grammar::from("success")).parse(& vec!['a', 'a'])),
+            format!("{:?}", g.parse(& vec!['a', 'b'])),
             "[Nonterminal(\"success\")]"
         );
     }
@@ -574,7 +593,7 @@ mod test {
         );
         assert_eq!(
             format!("{:?}", g.clone().parse(& vec!['a'])),
-            "[Cont(Grammar::Shift), Cont(Grammar::Shift)]"
+            "[Continuation, Continuation]"
         );
     }
     #[test]
@@ -595,16 +614,27 @@ mod test {
         );
         assert_eq!(
             format!("{:?}", g.clone().parse(& vec!['a'])),
-            "[Cont(Grammar::Shift), Cont(Grammar::Shift)]"
+            "[Continuation, Continuation]"
         );
     }
     #[test]
     fn test_character_plus_parse0() {
-        let x = character('a').plus().parse(& vec![]);
+        let x = character('a')
+        .plus()
+        .parse(& vec![]);
         assert_eq!(
             format!("{:?}", x),
-            "[Cont(Grammar::Shift)]"
+            "[Continuation]"
         );
+    }
+    #[test]
+    fn test_from() {
+        let x: Vec<Grammar<char, Vec<char>>> = Grammar::from(vec![])
+        .parse(& vec![]);
+        assert_eq!(
+            format!("{:?}", x),
+            "[Nonterminal([])]"
+        )
     }
     #[test]
     fn test_character_star_parse0() {
@@ -613,7 +643,7 @@ mod test {
         .parse(& vec![]);
         assert_eq!(
             format!("{:?}", x),
-            "[Nonterminal([]), Cont(Grammar::Shift)]"
+            "[Nonterminal([]), Continuation]"
         );
     }
     #[test]
@@ -621,35 +651,35 @@ mod test {
         let x = character('a').plus().parse(& vec!['a']);
         assert_eq!(
             format!("{:?}", x),
-            "[Nonterminal(['a']), Cont(Grammar::Shift)]"
+            "[Nonterminal(['a']), Continuation]"
         );
     }
     #[test]
     fn test_digit_star_parse() {
         assert_eq!(
             format!("{:?}", digit().star().parse(& vec!['1', '2', '3'])),
-            "[Nonterminal(['1', '2', '3']), Cont(Grammar::Shift)]"
+            "[Nonterminal(['1', '2', '3']), Cont(Grammar::Continuation)]"
         );
     }
    #[test]
     fn test_digit_or_letter_star_parse() {
         assert_eq!(
             format!("{:?}", digit().or(letter()).star().parse(& vec!['a', 'b', 'c', '1', '2', '3'])),
-            "[Nonterminal(['a', 'b', 'c', '1', '2', '3']), Cont(Grammar::Shift)]"
+            "[Nonterminal(['a', 'b', 'c', '1', '2', '3']), Cont(Grammar::Continuation)]"
         );
     }
     #[test]
     fn test_nat_parse() {
         assert_eq!(
             format!("{:?}", nat().parse(& vec!['1', '2', '3', ])),
-            "[Nonterminal(123), Cont(Grammar::Shift)]"
+            "[Nonterminal(123), Cont(Grammar::Continuation)]"
         );
     }
    #[test]
     fn test_integer_parse() {
         assert_eq!(
             format!("{:?}", integer().parse(& vec!['-', '4', '2', ])),
-            "[Nonterminal(-42), Cont(Grammar::Shift), Cont(Grammar::Shift)]"
+            "[Nonterminal(-42), Cont(Grammar::Continuation), Cont(Grammar::Continuation)]"
         )
     }
     #[test]
@@ -663,14 +693,14 @@ mod test {
     fn test_factor_parse1() {
         assert_eq!(
             format!("{:?}", factor().parse(& vec!['-', '4', '2', ])),
-            "[Nonterminal(-42), Cont(Grammar::Shift), Cont(Grammar::Shift)]"
+            "[Nonterminal(-42), Cont(Grammar::Continuation), Cont(Grammar::Continuation)]"
         );
     }
     #[test]
     fn test_term_parse() {
         let input = "3*4".chars().collect();
-        let r: Vec<ParseResult<char, i64>> = term().parse(& input)
-            .into_iter().filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+        let r: Vec<Grammar<char, i64>> = term().parse(& input)
+            .into_iter().filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
             .collect();
         assert_eq!(
             format!("{:?}", r),
@@ -679,19 +709,19 @@ mod test {
     }
     #[test]
     fn test_expr_parse() {
-        let r: Vec<ParseResult<char, i64>> = expr()
+        let r: Vec<Grammar<char, i64>> = expr()
             .parse(& vec!['2', '+', '3', '*', '4', ])
-            .into_iter().filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+            .into_iter().filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
             .collect();
         assert_eq!(format!("{:?}", r), "[Nonterminal(14)]");
     }
     #[test]
     fn test_expr_parse_with_parentheses1() {
         let input: Vec<char> = "(2+3)*4".chars().collect();
-        let r: Vec<ParseResult<char, i64>> = expr()
+        let r: Vec<Grammar<char, i64>> = expr()
         .parse(& input)
         .into_iter()
-        .filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+        .filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
         .collect();
         assert_eq!(
             format!("{:?}", r),
@@ -701,10 +731,10 @@ mod test {
     #[test]
     fn test_expr_parse_with_parentheses2() {
         let input: Vec<char> = "(2+(7*10)+8)*20".chars().collect();
-        let r: Vec<ParseResult<char, i64>> = expr()
+        let r: Vec<Grammar<char, i64>> = expr()
         .parse(& input)
         .into_iter()
-        .filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+        .filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
         .collect();
         assert_eq!(
             format!("{:?}", r),
@@ -715,10 +745,10 @@ mod test {
     #[test]
     fn test_expr_parse_fail1() {
         let input = "2+3*".chars().collect();
-        let r: Vec<ParseResult<char, i64>> = expr()
+        let r: Vec<Grammar<char, i64>> = expr()
         .parse(& input)
         .into_iter()
-        .filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+        .filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
         .collect();
         assert_eq!(
             format!("{:?}", r),
@@ -729,9 +759,9 @@ mod test {
     #[test]
     fn test_expr_parse_fail2() {
         let input = "(2+3".chars().collect();
-        let r: Vec<ParseResult<char, i64>> = expr().parse(& input)
+        let r: Vec<Grammar<char, i64>> = expr().parse(& input)
         .into_iter()
-        .filter(|pr| matches!(pr, ParseResult::Nonterminal(_)))
+        .filter(|pr| matches!(pr, Grammar::Nonterminal(_)))
         .collect();
         assert_eq!(
             format!("{:?}", r),
