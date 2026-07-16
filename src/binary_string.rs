@@ -8,7 +8,7 @@ pub fn infinite_reduce1() -> Grammar<char, String> {
 }
 // This overflows the stack during grammar application
 pub fn infinite_reduce2() -> Grammar<char, String> {
-    Grammar::Recursion
+    Grammar::Recursion(Rc::new(|ir| ir.clone()))
 }
 
 // This consumes a token before recursion, preventing stack overflow
@@ -21,9 +21,15 @@ pub fn infinite_shift1() -> Grammar<char, String> {
 // This consumes a token before recursion, preventing stack overflow
 pub fn infinite_shift2() -> Grammar<char, String> {
     use Grammar::*;
-    Shift(Rc::new(move |c|
-        Recursion
-    ))
+    Grammar::Recursion(Rc::new(|is| {
+        let is_clone = is.clone();
+        Shift(Rc::new(
+            move |c| {
+                let is_clone = is_clone.clone();
+                is_clone
+            }
+        ))
+    }))
 }
 
 // This consumes a token before recursion, preventing stack overflow
@@ -37,27 +43,38 @@ pub fn last1() -> Grammar<char, String> {
 }
 pub fn last2() -> Grammar<char, String> {
     use Grammar::*;
-    item()
-    .then(|c|
-        Recursion
-        .or(Nonterminal(format!("{c}")))
-    )
+    Grammar::Recursion(Rc::new(|last| {
+        let last_clone = last.clone();
+        item()
+        .then(move |c| {
+            let last_clone = last_clone.clone();
+            last_clone
+            .or(Nonterminal(format!("{c}")))
+        })
+    }))
 }
 
 pub fn binary_string() -> Grammar<char, String> {
     use Grammar::*;
-    Recursion
-    .then(move |left: & String| {
-        let left_clone = left.clone();
-        Recursion
-        .then(move |right: & String| {
-            let right_clone = right.clone();
-            Nonterminal(format!("({left_clone} {right_clone})"))
+    Grammar::Recursion(Rc::new(|bs| {
+        println!("bs = {bs:?}");
+        let bs1 = bs.clone();
+        let bs2 = bs1.clone();
+        bs1
+        .then(move |left: & String| {
+            let left_clone = left.clone();
+            bs2.clone()
+            .then(move |right: & String| {
+                let right_clone = right.clone();
+                Nonterminal(format!("({left_clone} {right_clone})"))
+            })
         })
-    })
-    .or(
-        item().then(|c| Nonterminal(format!("{c}")))
-    )
+        .or(item()
+            .then(|c| {
+                Nonterminal(format!("{c}"))
+            })
+        )
+    }))
 }
 
 pub fn binary_string1() -> Grammar<char, String> {
@@ -80,7 +97,7 @@ pub fn binary_string1() -> Grammar<char, String> {
             })
         )
     };
-    Recursion
+    Recursion(Rc::new(recursive))
 }
 
 #[cfg(test)]
@@ -131,12 +148,12 @@ mod test {
         let x = x[0].shift(& 'b').reduce();
         assert_eq!(
             format!("{x:?}"),
-            "[Shift, Nonterminal(\"b\")]"
+            "[Recursion, Nonterminal(\"b\")]"
         );
         let x = g.parse(& vec!['a', 'b', 'c', '1', '?', '!']);
         assert_eq!(
             format!("{x:?}"),
-            "[Shift, Nonterminal(\"!\")]"
+            "[Recursion, Nonterminal(\"!\")]"
         );
     }
 

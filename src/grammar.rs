@@ -12,7 +12,7 @@ where
     Nonterminal(N),
     Reduce(Vec<Grammar<T, N>>),
     Shift(Rc<dyn Fn(&T) -> Grammar<T, N>>),
-    Recursion,
+    Recursion(Rc<dyn Fn(& Grammar<T, N>) -> Grammar<T, N>>),
 }
 
 impl<T, N> Grammar<T, N>
@@ -39,7 +39,10 @@ where
                 )
                 .collect()),
             Shift(ndnary) => ndnary(t),
-            Recursion => self.clone(),
+            Recursion(ndnary_gen) => match ndnary_gen(self) {
+                Recursion(_) => panic!("Recursion should not return Recursion"),
+                g => g.shift(t),
+            },
         }
     }
 
@@ -50,7 +53,7 @@ where
         match self {
             Reduce(rs) => rs.iter().flat_map(Grammar::reduce).collect(),
             Nonterminal(_) | Shift(_) => vec![self.clone()],
-            Recursion => vec![self.clone()],
+            Recursion(_) => vec![self.clone()],
         }
     }
 
@@ -72,10 +75,11 @@ where
                 let rs = rs.clone();
                 Reduce(rs.into_iter().map(|g| g.then(f.clone())).collect())
             },
-            Shift(_) => Shift(Rc::new(
-                move |t| self.shift(t).then(f.clone())
+            Shift(ndnary) => Shift(Rc::new(
+                move |t| ndnary(t).then(f.clone())
             )),
-            Recursion => todo!(),
+            // A left-recursive rule is being defined
+            Recursion(ndnary_gen) => todo!(),
         }
     }
 
@@ -137,7 +141,7 @@ where
             Nonterminal(n) => write!(f, "Nonterminal({:?})", n),
             Reduce(rs) => write!(f, "Reduce({:?})", rs),
             Shift(_) => write!(f, "Shift"),
-            Recursion => write!(f, "Recursion"),
+            Recursion(_) => write!(f, "Recursion"),
         }
     }
 }
