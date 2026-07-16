@@ -30,7 +30,7 @@ pub fn noun() -> Grammar<String, Sentence> {
             Reduce(vec![])
         }
     }));
-    cat.or(mat)
+    cat.or(& mat)
 }
 
 pub fn noun_phrase() -> Grammar<String, Sentence> {
@@ -83,7 +83,7 @@ pub fn sentence() -> Grammar<String, Sentence> {
                     .then(move |np_sym| Grammar::Nonterminal(Sentence::VP(format!("({:?} {:?})", v_sym, np_sym))))
             }
         })
-        .or(v.then({
+        .or(& v.then({
             let pp = pp.clone();
             move |v_sym| {
                 let v_sym = v_sym.clone();

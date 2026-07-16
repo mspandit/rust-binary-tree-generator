@@ -12,7 +12,6 @@ where
     Nonterminal(N),
     Reduce(Vec<Grammar<T, N>>),
     Shift(Rc<dyn Fn(&T) -> Grammar<T, N>>),
-    Recursion(Rc<dyn Fn(& Grammar<T, N>) -> Grammar<T, N>>),
 }
 
 impl<T, N> Grammar<T, N>
@@ -39,10 +38,6 @@ where
                 )
                 .collect()),
             Shift(ndnary) => ndnary(t),
-            Recursion(ndnary_gen) => match ndnary_gen(self) {
-                Recursion(_) => panic!("Recursion should not return Recursion"),
-                g => g.shift(t),
-            },
         }
     }
 
@@ -53,15 +48,14 @@ where
         match self {
             Reduce(rs) => rs.iter().flat_map(Grammar::reduce).collect(),
             Nonterminal(_) | Shift(_) => vec![self.clone()],
-            Recursion(_) => vec![self.clone()],
         }
     }
 
-    pub fn or(self: Self, other: Self) -> Self {
+    pub fn or(self: & Self, other: & Self) -> Self {
         Grammar::Reduce(vec![self.clone(), other.clone()])
     }
 
-    pub fn then<M, F>(self: Self, f: F) -> Grammar<T, M>
+    pub fn then<M, F>(self: & Self, f: F) -> Grammar<T, M>
     where
         T: 'static + Debug,
         N: 'static + Debug ,
@@ -78,8 +72,6 @@ where
             Shift(ndnary) => Shift(Rc::new(
                 move |t| ndnary(t).then(f.clone())
             )),
-            // A left-recursive rule is being defined
-            Recursion(ndnary_gen) => todo!(),
         }
     }
 
@@ -89,7 +81,7 @@ where
         N: 'static + Debug,
     {
         use Grammar::*;
-        self.clone().plus().or(Nonterminal(vec![]))
+        self.clone().plus().or(& Nonterminal(vec![]))
     }
 
     pub fn plus(self: Self) -> Grammar<T, Vec<N>>
@@ -141,9 +133,17 @@ where
             Nonterminal(n) => write!(f, "Nonterminal({:?})", n),
             Reduce(rs) => write!(f, "Reduce({:?})", rs),
             Shift(_) => write!(f, "Shift"),
-            Recursion(_) => write!(f, "Recursion"),
         }
     }
+}
+
+// Eliminates the Grammar::Shift(Rc::new(...)) boilerplate
+pub fn item<T, U>() -> Grammar<T, U>
+where
+    T: Clone,
+    U: Clone + std::convert::From<T>,
+{
+    Grammar::Shift(Rc::new(|input: &T| Grammar::Nonterminal(input.clone().into())))
 }
 
 #[cfg(test)]
