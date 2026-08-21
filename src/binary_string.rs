@@ -491,6 +491,63 @@ use super::*;
             "[Shift, Shift]"
         );
     }
+
+    // (Recursive) generator returns a binary string
+    // grammar that consumes (n) tokens.
+    fn binary_generator(n: usize) -> Grammar<char, String> {
+        use Grammar::*;
+        match n {
+            0 => Reduce(vec![]),
+            1 => item(),
+            n => {
+                // https://www.geeksforgeeks.org/dsa/program-nth-catalan-number/#naive-approach-by-using-recursion
+                let mut res: Grammar<char, String> = binary_generator(1).then(move |left: & String| {
+                    let left_clone = left.clone();
+                    binary_generator(n - 1).then(move |right: & String| {
+                        Nonterminal(format!("({left_clone} {right})"))
+                    })
+                });
+                for i in 2..n {
+                    res = res.or(& binary_generator(i).then(move |left: & String| {
+                        let left_clone = left.clone();
+                        binary_generator(n - i).then(move |right: & String| {
+                            Nonterminal(format!("({left_clone} {right})"))
+                        })
+                    }))
+                }
+                res
+            },
+        }
+    }
+
+    #[test]
+    fn test_binary_from_scratch8() {
+        use Grammar::*;
+        let g1 = binary_generator(1);
+        assert_eq!(
+            format!("{:?}", g1.shift(& 'a').reduce()),
+            "[Nonterminal(\"a\")]"
+        );
+
+        let g2 = binary_generator(2).shift(& 'a');
+        assert_eq!(
+            format!("{:?}", g2.shift(& 'b').reduce()),
+            "[Nonterminal(\"(a b)\")]"
+        );
+
+        let g3 = binary_generator(3).shift(& 'a').shift(& 'b');
+        assert_eq!(
+            format!("{:?}", g3.shift(& 'c').reduce()),
+            "[Nonterminal(\"(a (b c))\"), Nonterminal(\"((a b) c)\")]"
+        );
+
+        let g4 = binary_generator(4).shift(& 'a').shift(& 'b').shift(& 'c');
+        assert_eq!(
+            format!("{:?}", g4.shift(& 'd').reduce()),
+            "[Nonterminal(\"(a (b (c d)))\"), Nonterminal(\"(a ((b c) d))\"), Nonterminal(\"((a b) (c d))\"), Nonterminal(\"((a (b c)) d)\"), Nonterminal(\"(((a b) c) d)\")]"
+        )
+    }
+
     #[test]
     fn test_infinite_shift() {
         let g = infinite_shift1();
