@@ -123,14 +123,14 @@ mod test {
     fn test_one_word() {
         let input = vec!["the".to_string()];
         let x = sentence().parse(&input);
-        assert_eq!(format!("{:?}", x), "[Shift, Shift]",);
+        assert_eq!(format!("{:?}", x), "[]",);
     }
 
     #[test]
     fn test_two_words() {
         let input = vec!["the".to_string(), "cat".to_string()];
         let x = sentence().parse(&input);
-        assert_eq!("[Shift, Shift]", format!("{:?}", x));
+        assert_eq!("[]", format!("{:?}", x));
     }
 
     #[test]

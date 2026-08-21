@@ -105,6 +105,7 @@ where
         T: 'static,
         N: 'static,
     {
+        use Grammar::*;
         inputs.iter().fold(
             self.reduce(), // initial reduction
             |state, token| {
@@ -119,6 +120,20 @@ where
                     .collect()
             },
         )
+        .into_iter()
+        .filter(|t| matches!(t, Nonterminal(_)))
+        .collect::<Vec<Grammar<T, N>>>()
+    }
+
+    pub fn map<U> (self: & Self, f: fn(& N) -> U) -> Vec<U> {
+        use Grammar::*;
+        match self {
+            Nonterminal(n) => vec![f(n)],
+            Reduce(v) => v.iter()
+            .flat_map(|g| g.map(f))
+            .collect(),
+            Shift(_) => vec![],
+        }
     }
 }
 
@@ -146,6 +161,23 @@ where
     Grammar::Shift(Rc::new(|input: &T| Grammar::Nonterminal(input.clone().into())))
 }
 
+pub fn left_recursive<T, N>(generator: fn(usize) -> Grammar<T, N>)
+-> Grammar<T, N>
+where
+    T: Clone + 'static + Debug,
+    N: Clone + 'static + Debug
+{
+    item().star() // Stack inputs
+    .then(move |cs: & Vec<T>| {
+        // Initialize with grammar of the necessary
+        // depth, then apply it to history of inputs
+        cs.iter().fold(
+            generator(cs.len()),
+            |g, c| g.shift(c)
+        )
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -163,5 +195,26 @@ mod test {
         let x = g.parse(&vec!['c']);
         assert_eq!(x.len(), 1);
         assert!(matches!(x[0], Grammar::Nonterminal('c')));
+    }
+
+    #[test]
+    fn test_failure() {
+        use Grammar::*;
+        let failure: Grammar<char, char> = Reduce(vec![]);
+        assert_eq!(
+            format!("{:?}", failure.shift(& 'a').reduce()),
+            "[]"
+        );
+    }
+
+    #[test]
+    fn test_or_identity() {
+        use Grammar::*;
+        let failure: Grammar<char, char> = Reduce(vec![]);
+        let g = failure.or(& item());
+        assert_eq!(
+            format!("{:?}", g.shift(& 'a').reduce()),
+            "[Nonterminal('a')]"
+        );
     }
 }
