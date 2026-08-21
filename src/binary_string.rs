@@ -520,6 +520,39 @@ use super::*;
         }
     }
 
+    fn binary_string() -> Grammar<char, String> {
+        item().star() // Stack inputs
+        .then(move |cs: & Vec<char>| {
+            // Initialize with grammar of the necessary
+            // depth, then apply it to history of inputs
+            cs.iter().fold(
+                binary_generator(cs.len()),
+                |g, c| g.shift(c)
+            )
+        })
+    }
+
+    #[test]
+    fn test_binary_string() {
+        let g = binary_string();
+        assert_eq!(
+            format!("{:?}", g.shift(& 'a').reduce()),
+            "[Shift, Nonterminal(\"a\")]"
+        );
+        assert_eq!(
+            format!("{:?}", g.shift(& 'a').shift(& 'b').reduce()),
+            "[Shift, Nonterminal(\"(a b)\")]"
+        );
+        assert_eq!(
+            format!("{:?}", g.shift(& 'a').shift(& 'b').shift(& 'c').reduce()),
+            "[Shift, Nonterminal(\"(a (b c))\"), Nonterminal(\"((a b) c)\")]"
+        );
+        assert_eq!(
+            format!("{:?}", g.shift(& 'a').shift(& 'b').shift(& 'c').shift(& 'd').reduce()),
+            "[Shift, Nonterminal(\"(a (b (c d)))\"), Nonterminal(\"(a ((b c) d))\"), Nonterminal(\"((a b) (c d))\"), Nonterminal(\"((a (b c)) d)\"), Nonterminal(\"(((a b) c) d)\")]"
+        )
+    }
+
     #[test]
     fn test_binary_from_scratch8() {
         use Grammar::*;
