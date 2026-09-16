@@ -43,8 +43,12 @@ pub fn noun_phrase() -> Grammar<String, Sentence> {
     }));
     det.then(move |d| {
         let d = d.clone();
-        noun()
-            .then(move |n_sym| Grammar::Nonterminal(Sentence::NP(format!("({:?} {:?})", d, n_sym))))
+        noun().then(move |n_sym| {
+            Grammar::Nonterminal(Sentence::NP(format!(
+                "({:?} {:?})",
+                d, n_sym
+            )))
+        })
     })
 }
 
@@ -70,7 +74,10 @@ pub fn sentence() -> Grammar<String, Sentence> {
         move |p_sym| {
             let p_sym = p_sym.clone();
             np.clone().then(move |np_sym| {
-                Grammar::Nonterminal(Sentence::PP(format!("({:?} {:?})", p_sym, np_sym)))
+                Grammar::Nonterminal(Sentence::PP(format!(
+                    "({:?} {:?})",
+                    p_sym, np_sym
+                )))
             })
         }
     });
@@ -82,7 +89,10 @@ pub fn sentence() -> Grammar<String, Sentence> {
             move |v_sym| {
                 let v_sym = v_sym.clone();
                 np.clone().then(move |np_sym| {
-                    Grammar::Nonterminal(Sentence::VP(format!("({:?} {:?})", v_sym, np_sym)))
+                    Grammar::Nonterminal(Sentence::VP(format!(
+                        "({:?} {:?})",
+                        v_sym, np_sym
+                    )))
                 })
             }
         })
@@ -91,7 +101,10 @@ pub fn sentence() -> Grammar<String, Sentence> {
             move |v_sym| {
                 let v_sym = v_sym.clone();
                 pp.clone().then(move |pp_sym| {
-                    Grammar::Nonterminal(Sentence::VP(format!("({:?} {:?})", v_sym, pp_sym)))
+                    Grammar::Nonterminal(Sentence::VP(format!(
+                        "({:?} {:?})",
+                        v_sym, pp_sym
+                    )))
                 })
             }
         }));
@@ -99,13 +112,19 @@ pub fn sentence() -> Grammar<String, Sentence> {
     np.then(move |np_sym| {
         let np_sym = np_sym.clone();
         vp.clone().then(move |vp_sym| {
-            Grammar::Nonterminal(Sentence::S(format!("({:?} {:?})", np_sym, vp_sym)))
+            Grammar::Nonterminal(Sentence::S(format!(
+                "({:?} {:?})",
+                np_sym, vp_sym
+            )))
         })
     })
 }
 
 impl Debug for Sentence {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
             Sentence::Det(s)
             | Sentence::N(s)
@@ -140,10 +159,11 @@ mod test {
 
     #[test]
     fn test_six_words() {
-        let word_sequence = vec!["the", "cat", "sat", "on", "the", "mat"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
+        let word_sequence =
+            vec!["the", "cat", "sat", "on", "the", "mat"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>();
         let x = sentence().parse(word_sequence);
         assert_eq!(1, x.len(), "{x:?}");
         assert_eq!(

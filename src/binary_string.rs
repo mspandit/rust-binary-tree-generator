@@ -7,7 +7,8 @@ pub fn _infinite_reduce1() -> Grammar<char, String> {
     Grammar::Reduce(vec![_infinite_reduce1()])
 }
 
-// This consumes a token before recursion, preventing stack overflow
+// This consumes a token before recursion, preventing stack
+// overflow.
 pub fn _infinite_shift1() -> Grammar<char, String> {
     use Grammar::*;
     Shift(Rc::new(move |_c| _infinite_shift1()))
@@ -25,8 +26,9 @@ fn binary_generator(n: usize) -> Grammar<char, String> {
         n => (1..n).fold(binary_generator(0), |g, i| {
             g.or(&binary_generator(i).then(move |left: &String| {
                 let left_clone = left.clone();
-                binary_generator(n - i)
-                    .then(move |right: &String| Nonterminal(format!("({left_clone} {right})")))
+                binary_generator(n - i).then(move |right: &String| {
+                    Nonterminal(format!("({left_clone} {right})"))
+                })
             }))
         }),
     }
@@ -41,21 +43,26 @@ mod test {
 
     use super::*;
 
-    // This consumes a token before recursion, preventing stack overflow
+    // This consumes a token before recursion, preventing stack
+    // overflow.
     pub fn last1() -> Grammar<char, String> {
         use Grammar::*;
-        item().then(|c: &char| last1().or(&Nonterminal(format!("{c}"))))
+        item()
+            .then(|c: &char| last1().or(&Nonterminal(format!("{c}"))))
     }
 
     #[test]
     fn test_binary_from_scratch1() {
         use Grammar::*;
-        let c1: Grammar<char, String> = Shift(Rc::new(move |t| Nonterminal(format!("{t}"))));
+        let c1: Grammar<char, String> =
+            Shift(Rc::new(move |t| Nonterminal(format!("{t}"))));
         let c1_clone = c1.clone();
         let c2 = c1.clone().then(move |lc| {
             let lc_clone = lc.clone();
             let c1_clone = c1.clone();
-            c1_clone.then(move |rc| Nonterminal(format!("({lc_clone} {rc})")))
+            c1_clone.then(move |rc| {
+                Nonterminal(format!("({lc_clone} {rc})"))
+            })
         });
         let g = c1_clone.or(&c2);
         let x = g.parse(vec!['a']);
@@ -72,47 +79,70 @@ mod test {
         let src2_clone = src2.clone();
         src1.then(move |left: &String| {
             let left_clone = left.clone();
-            src2_clone.then(move |right: &String| Nonterminal(format!("({left_clone} {right})")))
+            src2_clone.then(move |right: &String| {
+                Nonterminal(format!("({left_clone} {right})"))
+            })
         })
     }
 
     #[test]
     fn test_binary_from_scratch7() {
         use Grammar::*;
-        let b: Grammar<char, String> = item().then(move |c: &char| Nonterminal(format!("{c}")));
+        let b: Grammar<char, String> =
+            item().then(move |c: &char| Nonterminal(format!("{c}")));
         // g1.shift(& 'a') -> "a", "(a ?)"
         let g1 = b.clone().or(&recurse2(&b, &b));
         let x = g1.shift(&'a');
-        assert_eq!(format!("{:?}", x.reduce()), "[Nonterminal(\"a\"), Shift]");
+        assert_eq!(
+            format!("{:?}", x.reduce()),
+            "[Nonterminal(\"a\"), Shift]"
+        );
         let x1 = x.reduce()[1].shift(&'b');
-        assert_eq!(format!("{:?}", x1.reduce()), "[Nonterminal(\"(a b)\")]");
-        // [a, (a ?)] then [?, (? ?)] = [(a ?), (a (? ?)), ((a ?) ?), ((a ?) (? ?))]
-        // g2.shift(& 'b') -> "(a b)", "(a (b ?))", "((a b) ?)"
+        assert_eq!(
+            format!("{:?}", x1.reduce()),
+            "[Nonterminal(\"(a b)\")]"
+        );
+        // [a, (a ?)] then [?, (? ?)] produces all partial
+        // binary trees.
         let g2: Grammar<char, String> = x.or(&recurse2(&x, &g1));
         let x = g2.shift(&'b');
         assert_eq!(
             format!("{:?}", x.reduce()),
             // Undesirable repetition
-            "[Nonterminal(\"(a b)\"), Nonterminal(\"(a b)\"), Shift, Shift, Shift]" // (a b) (a (b ?)) ((a b) ?)
+            concat!(
+                "[Nonterminal(\"(a b)\"), Nonterminal(\"(a b)\"), ",
+                "Shift, Shift, Shift]"
+            ) // (a b), (a (b ?)), ((a b) ?)
         );
         let x1 = x.reduce()[2].shift(&'c');
-        assert_eq!(format!("{:?}", x1.reduce()), "[Nonterminal(\"(a (b c))\")]");
+        assert_eq!(
+            format!("{:?}", x1.reduce()),
+            "[Nonterminal(\"(a (b c))\")]"
+        );
         let x2 = x.reduce()[3].shift(&'c');
-        assert_eq!(format!("{:?}", x2.reduce()), "[Nonterminal(\"((a b) c)\")]");
+        assert_eq!(
+            format!("{:?}", x2.reduce()),
+            "[Nonterminal(\"((a b) c)\")]"
+        );
         let x3 = x.reduce()[4].shift(&'c').shift(&'d');
         assert_eq!(
             format!("{:?}", x3.reduce()),
             "[Nonterminal(\"((a b) (c d))\")]"
         );
-        // [(a b), (a (b ?)), ((a b) ?), ((a b) (? ?))] then [?, (? ?)] =
-        // [((a b) ?), ((a b) (? ?)), ((a (b ?)) ?), ((a (b ?)) (? ?)), (((a b) ?) ?), (((a b) ?) (? ?)), (((a b) (? ?)) ?), (((a b) (? ?)) (? ?))]
-        // g3.shift(& 'c') -> "(a (b c))", "((a b) c)", Shift, Shift, Shift, Shift, Shift
+        // The next shift extends each partial tree and creates all
+        // remaining combinations.
         let g3: Grammar<char, String> = x.or(&recurse2(&x, &g1));
         let x = g3.shift(&'c');
         assert_eq!(
             format!("{:?}", x.reduce()),
             // Undesirable repetition
-            "[Nonterminal(\"(a (b c))\"), Nonterminal(\"((a b) c)\"), Shift, Nonterminal(\"((a b) c)\"), Shift, Nonterminal(\"((a b) c)\"), Shift, Shift, Shift, Shift, Shift, Shift]"
+            concat!(
+                "[Nonterminal(\"(a (b c))\"), ",
+                "Nonterminal(\"((a b) c)\"), ",
+                "Shift, Nonterminal(\"((a b) c)\"), Shift, ",
+                "Nonterminal(\"((a b) c)\"), Shift, Shift, Shift, ",
+                "Shift, Shift, Shift]"
+            )
         );
         let x1 = x.reduce()[2].shift(&'d');
         assert_eq!(
@@ -169,15 +199,31 @@ mod test {
             "[Shift, Nonterminal(\"(a b)\")]"
         );
         assert_eq!(
-            format!("{:?}", g.shift(&'a').shift(&'b').shift(&'c').reduce()),
-            "[Shift, Nonterminal(\"(a (b c))\"), Nonterminal(\"((a b) c)\")]"
+            format!(
+                "{:?}",
+                g.shift(&'a').shift(&'b').shift(&'c').reduce()
+            ),
+            concat!(
+                "[Shift, Nonterminal(\"(a (b c))\"), ",
+                "Nonterminal(\"((a b) c)\")]"
+            )
         );
         assert_eq!(
             format!(
                 "{:?}",
-                g.shift(&'a').shift(&'b').shift(&'c').shift(&'d').reduce()
+                g.shift(&'a')
+                    .shift(&'b')
+                    .shift(&'c')
+                    .shift(&'d')
+                    .reduce()
             ),
-            "[Shift, Nonterminal(\"(a (b (c d)))\"), Nonterminal(\"(a ((b c) d))\"), Nonterminal(\"((a b) (c d))\"), Nonterminal(\"((a (b c)) d)\"), Nonterminal(\"(((a b) c) d)\")]"
+            concat!(
+                "[Shift, Nonterminal(\"(a (b (c d)))\"), ",
+                "Nonterminal(\"(a ((b c) d))\"), ",
+                "Nonterminal(\"((a b) (c d))\"), ",
+                "Nonterminal(\"((a (b c)) d)\"), ",
+                "Nonterminal(\"(((a b) c) d)\")]"
+            )
         );
         assert_eq!(
             g.shift(&'a')
@@ -212,10 +258,17 @@ mod test {
             "[Nonterminal(\"(a (b c))\"), Nonterminal(\"((a b) c)\")]"
         );
 
-        let g4 = binary_generator(4).shift(&'a').shift(&'b').shift(&'c');
+        let g4 =
+            binary_generator(4).shift(&'a').shift(&'b').shift(&'c');
         assert_eq!(
             format!("{:?}", g4.shift(&'d').reduce()),
-            "[Nonterminal(\"(a (b (c d)))\"), Nonterminal(\"(a ((b c) d))\"), Nonterminal(\"((a b) (c d))\"), Nonterminal(\"((a (b c)) d)\"), Nonterminal(\"(((a b) c) d)\")]"
+            concat!(
+                "[Nonterminal(\"(a (b (c d)))\"), ",
+                "Nonterminal(\"(a ((b c) d))\"), ",
+                "Nonterminal(\"((a b) (c d))\"), ",
+                "Nonterminal(\"((a (b c)) d)\"), ",
+                "Nonterminal(\"(((a b) c) d)\")]"
+            )
         )
     }
 

@@ -1,7 +1,9 @@
 use crate::grammar::{Grammar, item, left_recursive};
 use std::fmt::Debug;
 
-fn sat(p: impl Fn(char) -> bool + 'static + Clone) -> Grammar<char, char> {
+fn sat(
+    p: impl Fn(char) -> bool + 'static + Clone,
+) -> Grammar<char, char> {
     item::<char, char>().then(move |c: &char| {
         if p(*c) {
             Grammar::Nonterminal(*c)
@@ -23,7 +25,10 @@ pub enum Expression {
 }
 
 impl Debug for Expression {
-    fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        self: &Self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         use Expression::*;
         match self {
             UnOp(s) | E(s) | BinOp(s) => write!(f, "{}", s),
@@ -78,7 +83,9 @@ fn expr_gen(n: usize) -> Grammar<char, Expression> {
                             use Expression::*;
                             let re2 = right_e.clone();
                             let le2 = le2.clone();
-                            Nonterminal(E(format!("({le2:?} {op_clone:?} {re2:?})")))
+                            Nonterminal(E(format!(
+                                "({le2:?} {op_clone:?} {re2:?})"
+                            )))
                         })
                     })
                 }))
@@ -90,7 +97,9 @@ fn expr_gen(n: usize) -> Grammar<char, Expression> {
                     let e_clone = e.clone();
                     let op_clone = op_clone.clone();
                     match (op_clone, e_clone) {
-                        (UnOp(op), E(e)) => Nonterminal(E(format!("{op}{e}"))),
+                        (UnOp(op), E(e)) => {
+                            Nonterminal(E(format!("{op}{e}")))
+                        }
                         _ => panic!("Unexpected pattern"),
                     }
                 })
@@ -118,10 +127,9 @@ mod test {
 
     fn nat() -> Grammar<char, i64> {
         digit().plus().then(|ds| {
-            Grammar::Nonterminal(
-                ds.into_iter()
-                    .fold(0, |acc, d| acc * 10 + d.to_digit(10).unwrap() as i64),
-            )
+            Grammar::Nonterminal(ds.into_iter().fold(0, |acc, d| {
+                acc * 10 + d.to_digit(10).unwrap() as i64
+            }))
         })
     }
 
@@ -131,17 +139,21 @@ mod test {
             .then(|_| Grammar::Nonterminal(()))
     }
 
-    fn token<T: Clone + 'static + Debug>(p: Grammar<char, T>) -> Grammar<char, T> {
+    fn token<T: Clone + 'static + Debug>(
+        p: Grammar<char, T>,
+    ) -> Grammar<char, T> {
         space().then(move |_| {
             p.clone().then(move |res| {
                 let res = res.clone();
-                space().then(move |_| Grammar::Nonterminal(res.clone()))
+                space()
+                    .then(move |_| Grammar::Nonterminal(res.clone()))
             })
         })
     }
 
     fn int() -> Grammar<char, i64> {
-        nat().or(&character('-').then(|_| nat().then(|n| Grammar::Nonterminal(-n))))
+        nat().or(&character('-')
+            .then(|_| nat().then(|n| Grammar::Nonterminal(-n))))
     }
 
     pub fn integer() -> Grammar<char, i64> {
@@ -153,7 +165,9 @@ mod test {
             .then(move |_| {
                 expr().then(move |x| {
                     let x = x.clone();
-                    character(')').then(move |_| Grammar::Nonterminal(x.clone()))
+                    character(')').then(move |_| {
+                        Grammar::Nonterminal(x.clone())
+                    })
                 })
             })
             .or(&integer())
@@ -162,7 +176,9 @@ mod test {
         factor()
             .then(|x| {
                 let x = x.clone();
-                character('*').then(move |_| term().then(move |y| Grammar::Nonterminal(x * y)))
+                character('*').then(move |_| {
+                    term().then(move |y| Grammar::Nonterminal(x * y))
+                })
             })
             .or(&factor())
     }
@@ -170,7 +186,9 @@ mod test {
         term()
             .then(move |x| {
                 let x = x.clone();
-                character('+').then(move |_| expr().then(move |y| Grammar::Nonterminal(x + y)))
+                character('+').then(move |_| {
+                    expr().then(move |y| Grammar::Nonterminal(x + y))
+                })
             })
             .or(&term())
     }
@@ -203,7 +221,9 @@ mod test {
             binop().then(move |bo| Nonterminal((e1_clone, *bo)))
         });
         expr_item()
-            .or(&unop().then(move |_unop| src_clone0.then(move |e| Nonterminal(-e))))
+            .or(&unop().then(move |_unop| {
+                src_clone0.then(move |e| Nonterminal(-e))
+            }))
             .or(&ebo.then(move |ebo| {
                 let ebo_clone = ebo.clone();
                 src_clone1.then(move |e2| match ebo_clone {
@@ -261,7 +281,10 @@ mod test {
         let x = expression().parse(input);
         assert_eq!(
             format!("{:?}", x),
-            "[Nonterminal((1 * (2 + -3))), Nonterminal(((1 * 2) + -3))]"
+            concat!(
+                "[Nonterminal((1 * (2 + -3))), ",
+                "Nonterminal(((1 * 2) + -3))]"
+            )
         )
     }
 
@@ -271,7 +294,11 @@ mod test {
         let x = expression().parse(input);
         assert_eq!(
             format!("{:?}", x),
-            "[Nonterminal((1 * (-2 + 3))), Nonterminal((1 * -(2 + 3))), Nonterminal(((1 * -2) + 3))]"
+            concat!(
+                "[Nonterminal((1 * (-2 + 3))), ",
+                "Nonterminal((1 * -(2 + 3))), ",
+                "Nonterminal(((1 * -2) + 3))]"
+            )
         )
     }
     #[test]
@@ -320,11 +347,14 @@ mod test {
     #[test]
     fn test_four_characters() {
         let input = "-1+2*4".chars();
-        let x: Vec<Grammar<char, i64>> = express_gen(&express_gen(&express_gen(&expr_item())))
-            .parse(input)
-            .into_iter()
-            .filter(|result| matches!(result, Grammar::Nonterminal(_)))
-            .collect();
+        let x: Vec<Grammar<char, i64>> =
+            express_gen(&express_gen(&express_gen(&expr_item())))
+                .parse(input)
+                .into_iter()
+                .filter(|result| {
+                    matches!(result, Grammar::Nonterminal(_))
+                })
+                .collect();
         assert_eq!(5, x.len(), "{x:?}");
     }
 
@@ -340,14 +370,15 @@ mod test {
 
     #[test]
     fn test_item_then_item_then1() {
-        let g: Grammar<char, &str> = item::<char, char>().then(|c1| {
-            let c1 = c1.clone();
-            item().then(move |c2: &char| {
-                assert_eq!(c1, 'a');
-                assert_eq!(*c2, 'b');
-                Grammar::Nonterminal("success")
-            })
-        });
+        let g: Grammar<char, &str> =
+            item::<char, char>().then(|c1| {
+                let c1 = c1.clone();
+                item().then(move |c2: &char| {
+                    assert_eq!(c1, 'a');
+                    assert_eq!(*c2, 'b');
+                    Grammar::Nonterminal("success")
+                })
+            });
         let x = g.parse(vec!['a', 'b']);
         assert_eq!(format!("{:?}", x), "[Nonterminal(\"success\")]",)
     }
@@ -385,7 +416,10 @@ mod test {
 
     #[test]
     fn test_digit_parse_non_digit() {
-        assert_eq!(format!("{:?}", digit().parse(vec!['a', 'b', 'c'])), "[]");
+        assert_eq!(
+            format!("{:?}", digit().parse(vec!['a', 'b', 'c'])),
+            "[]"
+        );
     }
     #[test]
     fn test_character_parse() {
@@ -396,7 +430,10 @@ mod test {
     }
     #[test]
     fn test_character_parse_non_char() {
-        assert_eq!(format!("{:?}", character('a').parse(vec!['1'])), "[]");
+        assert_eq!(
+            format!("{:?}", character('a').parse(vec!['1'])),
+            "[]"
+        );
     }
     #[test]
     fn test_digit_or_letter_parse() {
@@ -407,7 +444,9 @@ mod test {
     }
     #[test]
     fn test_character_then_parse() {
-        let g = character('a').then(|_| character('b').then(|_| Grammar::Nonterminal("success")));
+        let g = character('a').then(|_| {
+            character('b').then(|_| Grammar::Nonterminal("success"))
+        });
         assert_eq!(
             format!("{:?}", g.parse(vec!['a', 'b'])),
             "[Nonterminal(\"success\")]"
@@ -430,10 +469,14 @@ mod test {
     }
     #[test]
     fn test_character_or_parse1() {
-        let ab =
-            character('a').then(|_| character('b').then(|_| Grammar::Nonterminal(format!("ab"))));
-        let ac =
-            character('a').then(|_| character('c').then(|_| Grammar::Nonterminal(format!("ac"))));
+        let ab = character('a').then(|_| {
+            character('b')
+                .then(|_| Grammar::Nonterminal(format!("ab")))
+        });
+        let ac = character('a').then(|_| {
+            character('c')
+                .then(|_| Grammar::Nonterminal(format!("ac")))
+        });
         let g = ab.or(&ac);
         assert_eq!(
             format!("{:?}", g.clone().parse(vec!['a', 'b'])),
@@ -461,16 +504,25 @@ mod test {
         let x = g.reduce();
         assert_eq!(format!("{:?}", x), "[Shift]");
         let x = x[0].shift(&'a');
-        assert_eq!(format!("{:?}", x), "Reduce([Shift, Nonterminal(['a'])])");
+        assert_eq!(
+            format!("{:?}", x),
+            "Reduce([Shift, Nonterminal(['a'])])"
+        );
         let x = g.shift(&'a');
-        assert_eq!(format!("{:?}", x), "Reduce([Shift, Nonterminal(['a'])])");
+        assert_eq!(
+            format!("{:?}", x),
+            "Reduce([Shift, Nonterminal(['a'])])"
+        );
         let x = g.parse(vec!['a']);
         assert_eq!(format!("{:?}", x), "[Nonterminal(['a'])]");
     }
     #[test]
     fn test_digit_star_parse() {
         assert_eq!(
-            format!("{:?}", digit().star().parse(vec!['1', '2', '3'])),
+            format!(
+                "{:?}",
+                digit().star().parse(vec!['1', '2', '3'])
+            ),
             "[Nonterminal(['1', '2', '3'])]"
         );
     }
@@ -504,7 +556,10 @@ mod test {
     #[test]
     fn test_factor_parse() {
         assert_eq!(
-            format!("{:?}", factor().parse(vec!['(', '-', '4', '2', ')',])),
+            format!(
+                "{:?}",
+                factor().parse(vec!['(', '-', '4', '2', ')',])
+            ),
             "[Nonterminal(-42)]"
         );
     }

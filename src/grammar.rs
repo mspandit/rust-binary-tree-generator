@@ -50,7 +50,10 @@ where
     N: Clone + Debug,
     T: Clone + Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         f.debug_list().entries(self.results.as_slice()).finish()
     }
 }
@@ -83,7 +86,9 @@ where
         use Grammar::*;
         match self {
             Nonterminal(_) => Reduce(vec![]),
-            Reduce(_) => Reduce(self.reduce().iter().map(|g| g.shift(t)).collect()),
+            Reduce(_) => Reduce(
+                self.reduce().iter().map(|g| g.shift(t)).collect(),
+            ),
             Shift(ndnary) => ndnary(t),
         }
     }
@@ -93,7 +98,9 @@ where
     pub fn reduce(self: &Self) -> Vec<Self> {
         use Grammar::*;
         match self {
-            Reduce(rs) => rs.iter().flat_map(Grammar::reduce).collect(),
+            Reduce(rs) => {
+                rs.iter().flat_map(Grammar::reduce).collect()
+            }
             Nonterminal(_) | Shift(_) => vec![self.clone()],
         }
     }
@@ -114,9 +121,15 @@ where
             Nonterminal(n) => f(&n),
             Reduce(rs) => {
                 let rs = rs.clone();
-                Reduce(rs.into_iter().map(|g| g.then(f.clone())).collect())
+                Reduce(
+                    rs.into_iter()
+                        .map(|g| g.then(f.clone()))
+                        .collect(),
+                )
             }
-            Shift(ndnary) => Shift(Rc::new(move |t| ndnary(t).then(f.clone()))),
+            Shift(ndnary) => {
+                Shift(Rc::new(move |t| ndnary(t).then(f.clone())))
+            }
         }
     }
 
@@ -191,7 +204,10 @@ where
     N: Clone + Debug,
     T: Clone + Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         use Grammar::*;
         match self {
             Nonterminal(n) => write!(f, "Nonterminal({:?})", n),
@@ -212,7 +228,9 @@ where
     }))
 }
 
-pub fn left_recursive<T, N>(generator: fn(usize) -> Grammar<T, N>) -> Grammar<T, N>
+pub fn left_recursive<T, N>(
+    generator: fn(usize) -> Grammar<T, N>,
+) -> Grammar<T, N>
 where
     T: Clone + 'static + Debug,
     N: Clone + 'static + Debug,
@@ -249,7 +267,10 @@ mod test {
     fn test_failure() {
         use Grammar::*;
         let failure: Grammar<char, char> = Reduce(vec![]);
-        assert_eq!(format!("{:?}", failure.shift(&'a').reduce()), "[]");
+        assert_eq!(
+            format!("{:?}", failure.shift(&'a').reduce()),
+            "[]"
+        );
     }
 
     #[test]
