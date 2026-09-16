@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    rc::Rc,
-};
+use std::{fmt::Debug, ops::Index, rc::Rc};
 
 #[derive(Clone)]
 pub enum Grammar<T, N>
@@ -12,6 +9,62 @@ where
     Nonterminal(N),
     Reduce(Vec<Grammar<T, N>>),
     Shift(Rc<dyn Fn(&T) -> Grammar<T, N>>),
+}
+
+pub struct ParseIterator<T, N>
+where
+    N: Clone,
+    T: Clone,
+{
+    results: std::vec::IntoIter<Grammar<T, N>>,
+}
+
+impl<T, N> ParseIterator<T, N>
+where
+    N: Clone,
+    T: Clone,
+{
+    pub fn len(&self) -> usize {
+        self.results.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Grammar<T, N>> {
+        self.results.as_slice().iter()
+    }
+}
+
+impl<T, N> Iterator for ParseIterator<T, N>
+where
+    N: Clone,
+    T: Clone,
+{
+    type Item = Grammar<T, N>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.results.next()
+    }
+}
+
+impl<T, N> Debug for ParseIterator<T, N>
+where
+    N: Clone + Debug,
+    T: Clone + Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.results.as_slice()).finish()
+    }
+}
+
+impl<T, N> Index<usize> for ParseIterator<T, N>
+where
+    N: Clone,
+    T: Clone,
+{
+    type Output = Grammar<T, N>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.results.as_slice()[index]
+    }
 }
 
 impl<T, N> Grammar<T, N>
@@ -30,13 +83,7 @@ where
         use Grammar::*;
         match self {
             Nonterminal(_) => Reduce(vec![]),
-            Reduce(_) => Reduce(self
-                .reduce()
-                .iter()
-                .map(
-                    |g| g.shift(t)
-                )
-                .collect()),
+            Reduce(_) => Reduce(self.reduce().iter().map(|g| g.shift(t)).collect()),
             Shift(ndnary) => ndnary(t),
         }
     }
@@ -51,14 +98,14 @@ where
         }
     }
 
-    pub fn or(self: & Self, other: & Self) -> Self {
+    pub fn or(self: &Self, other: &Self) -> Self {
         Grammar::Reduce(vec![self.clone(), other.clone()])
     }
 
-    pub fn then<M, F>(self: & Self, f: F) -> Grammar<T, M>
+    pub fn then<M, F>(self: &Self, f: F) -> Grammar<T, M>
     where
         T: 'static + Debug,
-        N: 'static + Debug ,
+        N: 'static + Debug,
         M: Clone + Debug,
         F: Fn(&N) -> Grammar<T, M> + Clone + 'static,
     {
@@ -68,10 +115,8 @@ where
             Reduce(rs) => {
                 let rs = rs.clone();
                 Reduce(rs.into_iter().map(|g| g.then(f.clone())).collect())
-            },
-            Shift(ndnary) => Shift(Rc::new(
-                move |t| ndnary(t).then(f.clone())
-            )),
+            }
+            Shift(ndnary) => Shift(Rc::new(move |t| ndnary(t).then(f.clone()))),
         }
     }
 
@@ -81,7 +126,7 @@ where
         N: 'static + Debug,
     {
         use Grammar::*;
-        self.clone().plus().or(& Nonterminal(vec![]))
+        self.clone().plus().or(&Nonterminal(vec![]))
     }
 
     pub fn plus(self: Self) -> Grammar<T, Vec<N>>
@@ -100,38 +145,42 @@ where
         })
     }
 
-    pub fn parse(self: &Self, inputs: &Vec<T>) -> Vec<Grammar<T, N>>
+    pub fn parse<I>(self: &Self, inputs: I) -> ParseIterator<T, N>
     where
+        I: IntoIterator<Item = T>,
         T: 'static,
         N: 'static,
     {
         use Grammar::*;
-        inputs.iter().fold(
-            self.reduce(), // initial reduction
-            |state, token| {
-                state
-                    .into_iter()
-                    .flat_map(|context| {
-                        context
-                            // shift each token, then reduce
-                            .shift(token)
-                            .reduce()
-                    })
-                    .collect()
-            },
-        )
-        .into_iter()
-        .filter(|t| matches!(t, Nonterminal(_)))
-        .collect::<Vec<Grammar<T, N>>>()
+        let results = inputs
+            .into_iter()
+            .fold(
+                self.reduce(), // initial reduction
+                |state, token| {
+                    state
+                        .into_iter()
+                        .flat_map(|context| {
+                            context
+                                // shift each token, then reduce
+                                .shift(&token)
+                                .reduce()
+                        })
+                        .collect()
+                },
+            )
+            .into_iter()
+            .filter(|t| matches!(t, Nonterminal(_)))
+            .collect::<Vec<_>>()
+            .into_iter();
+
+        ParseIterator { results }
     }
 
-    pub fn map<U> (self: & Self, f: fn(& N) -> U) -> Vec<U> {
+    pub fn map<U>(self: &Self, f: fn(&N) -> U) -> Vec<U> {
         use Grammar::*;
         match self {
             Nonterminal(n) => vec![f(n)],
-            Reduce(v) => v.iter()
-            .flat_map(|g| g.map(f))
-            .collect(),
+            Reduce(v) => v.iter().flat_map(|g| g.map(f)).collect(),
             Shift(_) => vec![],
         }
     }
@@ -158,24 +207,23 @@ where
     T: Clone,
     U: Clone + std::convert::From<T>,
 {
-    Grammar::Shift(Rc::new(|input: &T| Grammar::Nonterminal(input.clone().into())))
+    Grammar::Shift(Rc::new(|input: &T| {
+        Grammar::Nonterminal(input.clone().into())
+    }))
 }
 
-pub fn left_recursive<T, N>(generator: fn(usize) -> Grammar<T, N>)
--> Grammar<T, N>
+pub fn left_recursive<T, N>(generator: fn(usize) -> Grammar<T, N>) -> Grammar<T, N>
 where
     T: Clone + 'static + Debug,
-    N: Clone + 'static + Debug
+    N: Clone + 'static + Debug,
 {
-    item().star() // Stack inputs
-    .then(move |cs: & Vec<T>| {
-        // Initialize with grammar of the necessary
-        // depth, then apply it to history of inputs
-        cs.iter().fold(
-            generator(cs.len()),
-            |g, c| g.shift(c)
-        )
-    })
+    item()
+        .star() // Stack inputs
+        .then(move |cs: &Vec<T>| {
+            // Initialize with grammar of the necessary
+            // depth, then apply it to history of inputs
+            cs.iter().fold(generator(cs.len()), |g, c| g.shift(c))
+        })
 }
 
 #[cfg(test)]
@@ -192,7 +240,7 @@ mod test {
                 Reduce(vec![])
             }
         }));
-        let x = g.parse(&vec!['c']);
+        let x = g.parse(['c']).collect::<Vec<_>>();
         assert_eq!(x.len(), 1);
         assert!(matches!(x[0], Grammar::Nonterminal('c')));
     }
@@ -201,19 +249,16 @@ mod test {
     fn test_failure() {
         use Grammar::*;
         let failure: Grammar<char, char> = Reduce(vec![]);
-        assert_eq!(
-            format!("{:?}", failure.shift(& 'a').reduce()),
-            "[]"
-        );
+        assert_eq!(format!("{:?}", failure.shift(&'a').reduce()), "[]");
     }
 
     #[test]
     fn test_or_identity() {
         use Grammar::*;
         let failure: Grammar<char, char> = Reduce(vec![]);
-        let g = failure.or(& item());
+        let g = failure.or(&item());
         assert_eq!(
-            format!("{:?}", g.shift(& 'a').reduce()),
+            format!("{:?}", g.shift(&'a').reduce()),
             "[Nonterminal('a')]"
         );
     }
