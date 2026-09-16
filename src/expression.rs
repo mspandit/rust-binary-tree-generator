@@ -237,28 +237,28 @@ mod test {
     #[test]
     fn test_expression1() {
         let input = vec!['1'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(1)]")
     }
 
     #[test]
     fn test_expression2() {
         let input = vec!['-', '2'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(-2)]")
     }
 
     #[test]
     fn test_expression3() {
         let input = vec!['2', '*', '3'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal((2 * 3))]")
     }
 
     #[test]
     fn test_expression4() {
         let input = vec!['-', '2', '+', '3'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(
             format!("{:?}", x),
             "[Nonterminal((-2 + 3)), Nonterminal(-(2 + 3))]"
@@ -268,7 +268,7 @@ mod test {
     #[test]
     fn test_expression5() {
         let input = vec!['1', '*', '2', '+', '3'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(
             format!("{:?}", x),
             "[Nonterminal((1 * (2 + 3))), Nonterminal(((1 * 2) + 3))]"
@@ -278,7 +278,7 @@ mod test {
     #[test]
     fn test_expression6a() {
         let input = vec!['1', '*', '2', '+', '-', '3'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(
             format!("{:?}", x),
             concat!(
@@ -291,7 +291,7 @@ mod test {
     #[test]
     fn test_expression6b() {
         let input = vec!['1', '*', '-', '2', '+', '3'];
-        let x = expression().parse(input);
+        let x: Vec<_> = expression().parse(input).collect();
         assert_eq!(
             format!("{:?}", x),
             concat!(
@@ -304,21 +304,23 @@ mod test {
     #[test]
     fn test_zero_characters() {
         let input = vec![];
-        let x = express_gen(&expr_item()).parse(input);
+        let x: Vec<_> =
+            express_gen(&expr_item()).parse(input).collect();
         assert_eq!(format!("{:?}", x), "[]",);
     }
 
     #[test]
     fn test_one_character() {
         let input = vec!['1'];
-        let x = express_gen(&expr_item()).parse(input);
+        let x: Vec<_> =
+            express_gen(&expr_item()).parse(input).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(1)]");
     }
 
     #[test]
     fn test_item() {
         let g = item::<char, char>();
-        let x = g.parse(vec!['a']);
+        let x: Vec<_> = g.parse(vec!['a']).collect();
         assert_eq!(x.len(), 1);
         assert!(matches!(x[0], Grammar::Nonterminal('a')));
     }
@@ -326,21 +328,24 @@ mod test {
     #[test]
     fn test_two_characters1() {
         let input = "-1".chars();
-        let x = express_gen(&expr_item()).parse(input);
+        let x: Vec<_> =
+            express_gen(&expr_item()).parse(input).collect();
         assert_eq!("[Nonterminal(-1)]", format!("{:?}", x));
     }
 
     #[test]
     fn test_two_characters2() {
         let input = "1+".chars();
-        let x = express_gen(&expr_item()).parse(input);
+        let x: Vec<_> =
+            express_gen(&expr_item()).parse(input).collect();
         assert_eq!("[]", format!("{:?}", x));
     }
 
     #[test]
     fn test_three_characters() {
         let input = "1+3".chars();
-        let x = express_gen(&expr_item()).parse(input);
+        let x: Vec<_> =
+            express_gen(&expr_item()).parse(input).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(4)]",)
     }
 
@@ -364,7 +369,7 @@ mod test {
             assert_eq!(*c, 'a');
             Grammar::Nonterminal("success")
         });
-        let x = g.parse(vec!['a']);
+        let x: Vec<_> = g.parse(vec!['a']).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(\"success\")]",)
     }
 
@@ -379,7 +384,7 @@ mod test {
                     Grammar::Nonterminal("success")
                 })
             });
-        let x = g.parse(vec!['a', 'b']);
+        let x: Vec<_> = g.parse(vec!['a', 'b']).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(\"success\")]",)
     }
 
@@ -394,14 +399,14 @@ mod test {
                 assert_eq!(*c2, 'b');
                 Grammar::Nonterminal("success")
             });
-        let x = g.parse(vec!['a', 'b']);
+        let x: Vec<_> = g.parse(vec!['a', 'b']).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(\"success\")]",)
     }
 
     #[test]
     fn test_sat() {
         let g = sat(|c| c == 'a');
-        let x = g.parse(vec!['b']);
+        let x: Vec<_> = g.parse(vec!['b']).collect();
         println!("{:?}", x);
         assert_eq!(x.len(), 0);
     }
@@ -409,7 +414,10 @@ mod test {
     #[test]
     fn test_digit_parse() {
         assert_eq!(
-            format!("{:?}", digit().parse(vec!['1'])),
+            format!(
+                "{:?}",
+                digit().parse(vec!['1']).collect::<Vec<_>>()
+            ),
             "[Nonterminal('1')]"
         );
     }
@@ -417,28 +425,45 @@ mod test {
     #[test]
     fn test_digit_parse_non_digit() {
         assert_eq!(
-            format!("{:?}", digit().parse(vec!['a', 'b', 'c'])),
+            format!(
+                "{:?}",
+                digit()
+                    .parse(vec!['a', 'b', 'c'])
+                    .collect::<Vec<_>>()
+            ),
             "[]"
         );
     }
     #[test]
     fn test_character_parse() {
         assert_eq!(
-            format!("{:?}", character('a').parse(vec!['a'])),
+            format!(
+                "{:?}",
+                character('a').parse(vec!['a']).collect::<Vec<_>>()
+            ),
             "[Nonterminal('a')]"
         );
     }
     #[test]
     fn test_character_parse_non_char() {
         assert_eq!(
-            format!("{:?}", character('a').parse(vec!['1'])),
+            format!(
+                "{:?}",
+                character('a').parse(vec!['1']).collect::<Vec<_>>()
+            ),
             "[]"
         );
     }
     #[test]
     fn test_digit_or_letter_parse() {
         assert_eq!(
-            format!("{:?}", digit().or(&letter()).parse(vec!['a'])),
+            format!(
+                "{:?}",
+                digit()
+                    .or(&letter())
+                    .parse(vec!['a'])
+                    .collect::<Vec<_>>()
+            ),
             "[Nonterminal('a')]"
         );
     }
@@ -448,7 +473,10 @@ mod test {
             character('b').then(|_| Grammar::Nonterminal("success"))
         });
         assert_eq!(
-            format!("{:?}", g.parse(vec!['a', 'b'])),
+            format!(
+                "{:?}",
+                g.parse(vec!['a', 'b']).collect::<Vec<_>>()
+            ),
             "[Nonterminal(\"success\")]"
         );
     }
@@ -458,14 +486,23 @@ mod test {
             .or(&character('b'))
             .then(|ab| Grammar::Nonterminal(format!("{ab}")));
         assert_eq!(
-            format!("{:?}", g.clone().parse(vec!['a'])),
+            format!(
+                "{:?}",
+                g.clone().parse(vec!['a']).collect::<Vec<_>>()
+            ),
             "[Nonterminal(\"a\")]"
         );
         assert_eq!(
-            format!("{:?}", g.clone().parse(vec!['b'])),
+            format!(
+                "{:?}",
+                g.clone().parse(vec!['b']).collect::<Vec<_>>()
+            ),
             "[Nonterminal(\"b\")]"
         );
-        assert_eq!(format!("{:?}", g.parse(vec!['c'])), "[]");
+        assert_eq!(
+            format!("{:?}", g.parse(vec!['c']).collect::<Vec<_>>()),
+            "[]"
+        );
     }
     #[test]
     fn test_character_or_parse1() {
@@ -479,23 +516,35 @@ mod test {
         });
         let g = ab.or(&ac);
         assert_eq!(
-            format!("{:?}", g.clone().parse(vec!['a', 'b'])),
+            format!(
+                "{:?}",
+                g.clone().parse(vec!['a', 'b']).collect::<Vec<_>>()
+            ),
             "[Nonterminal(\"ab\")]"
         );
         assert_eq!(
-            format!("{:?}", g.clone().parse(vec!['a', 'c'])),
+            format!(
+                "{:?}",
+                g.clone().parse(vec!['a', 'c']).collect::<Vec<_>>()
+            ),
             "[Nonterminal(\"ac\")]"
         );
-        assert_eq!(format!("{:?}", g.clone().parse(vec!['a'])), "[]");
+        assert_eq!(
+            format!(
+                "{:?}",
+                g.clone().parse(vec!['a']).collect::<Vec<_>>()
+            ),
+            "[]"
+        );
     }
     #[test]
     fn test_character_plus_parse0() {
-        let x = character('a').plus().parse(vec![]);
+        let x: Vec<_> = character('a').plus().parse(vec![]).collect();
         assert_eq!(format!("{:?}", x), "[]");
     }
     #[test]
     fn test_character_star_parse0() {
-        let x = character('a').star().parse(vec![]);
+        let x: Vec<_> = character('a').star().parse(vec![]).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal([])]");
     }
     #[test]
@@ -513,7 +562,7 @@ mod test {
             format!("{:?}", x),
             "Reduce([Shift, Nonterminal(['a'])])"
         );
-        let x = g.parse(vec!['a']);
+        let x: Vec<_> = g.parse(vec!['a']).collect();
         assert_eq!(format!("{:?}", x), "[Nonterminal(['a'])]");
     }
     #[test]
@@ -521,7 +570,10 @@ mod test {
         assert_eq!(
             format!(
                 "{:?}",
-                digit().star().parse(vec!['1', '2', '3'])
+                digit()
+                    .star()
+                    .parse(vec!['1', '2', '3'])
+                    .collect::<Vec<_>>()
             ),
             "[Nonterminal(['1', '2', '3'])]"
         );
@@ -535,6 +587,7 @@ mod test {
                     .or(&letter())
                     .star()
                     .parse(vec!['a', 'b', 'c', '1', '2', '3'])
+                    .collect::<Vec<_>>()
             ),
             "[Nonterminal(['a', 'b', 'c', '1', '2', '3'])]"
         );
@@ -542,14 +595,22 @@ mod test {
     #[test]
     fn test_nat_parse() {
         assert_eq!(
-            format!("{:?}", nat().parse(vec!['1', '2', '3',])),
+            format!(
+                "{:?}",
+                nat().parse(vec!['1', '2', '3',]).collect::<Vec<_>>()
+            ),
             "[Nonterminal(123)]"
         );
     }
     #[test]
     fn test_integer_parse() {
         assert_eq!(
-            format!("{:?}", integer().parse(vec!['-', '4', '2',])),
+            format!(
+                "{:?}",
+                integer()
+                    .parse(vec!['-', '4', '2',])
+                    .collect::<Vec<_>>()
+            ),
             "[Nonterminal(-42)]"
         )
     }
@@ -558,7 +619,9 @@ mod test {
         assert_eq!(
             format!(
                 "{:?}",
-                factor().parse(vec!['(', '-', '4', '2', ')',])
+                factor()
+                    .parse(vec!['(', '-', '4', '2', ')',])
+                    .collect::<Vec<_>>()
             ),
             "[Nonterminal(-42)]"
         );
@@ -566,7 +629,12 @@ mod test {
     #[test]
     fn test_factor_parse1() {
         assert_eq!(
-            format!("{:?}", factor().parse(vec!['-', '4', '2',])),
+            format!(
+                "{:?}",
+                factor()
+                    .parse(vec!['-', '4', '2',])
+                    .collect::<Vec<_>>()
+            ),
             "[Nonterminal(-42)]"
         );
     }

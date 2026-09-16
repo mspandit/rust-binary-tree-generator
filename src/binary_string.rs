@@ -65,9 +65,9 @@ mod test {
             })
         });
         let g = c1_clone.or(&c2);
-        let x = g.parse(vec!['a']);
+        let x: Vec<_> = g.parse(vec!['a']).collect();
         assert_eq!(format!("{x:?}"), "[Nonterminal(\"a\")]");
-        let x = g.parse(vec!['a', 'b']);
+        let x: Vec<_> = g.parse(vec!['a', 'b']).collect();
         assert_eq!(format!("{x:?}"), "[Nonterminal(\"(a b)\")]");
     }
 
@@ -286,7 +286,8 @@ mod test {
         assert_eq!(format!("{x:?}"), "[Shift, Nonterminal(\"a\")]");
         let x = x[0].shift(&'b').reduce();
         assert_eq!(format!("{x:?}"), "[Shift, Nonterminal(\"b\")]");
-        let x = g.parse(vec!['a', 'b', 'c', '1', '?', '!']);
+        let x: Vec<_> =
+            g.parse(vec!['a', 'b', 'c', '1', '?', '!']).collect();
         assert_eq!(format!("{x:?}"), "[Nonterminal(\"!\")]");
     }
 }

@@ -146,14 +146,14 @@ mod test {
     #[test]
     fn test_one_word() {
         let input = vec!["the".to_string()];
-        let x = sentence().parse(input);
+        let x: Vec<_> = sentence().parse(input).collect();
         assert_eq!(format!("{:?}", x), "[]",);
     }
 
     #[test]
     fn test_two_words() {
         let input = vec!["the".to_string(), "cat".to_string()];
-        let x = sentence().parse(input);
+        let x: Vec<_> = sentence().parse(input).collect();
         assert_eq!("[]", format!("{:?}", x));
     }
 
@@ -164,7 +164,7 @@ mod test {
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<String>>();
-        let x = sentence().parse(word_sequence);
+        let x: Vec<_> = sentence().parse(word_sequence).collect();
         assert_eq!(1, x.len(), "{x:?}");
         assert_eq!(
             format!("{:?}", x),
