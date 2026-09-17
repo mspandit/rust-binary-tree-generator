@@ -11,6 +11,65 @@ where
     Shift(Rc<dyn Fn(&T) -> Grammar<T, N>>),
 }
 
+// A cheaply-cloneable, lazily-evaluated iterator over the
+// elements matched by `star`/`plus`. It shares its backing
+// storage via `Rc`, so cloning it (as `Grammar::Nonterminal`
+// values routinely are) never copies the matched elements
+// themselves, and consumers pull items one at a time instead
+// of receiving an already-materialized `Vec<N>`.
+#[derive(Clone)]
+pub struct StreamIter<N> {
+    items: Rc<Vec<N>>,
+    index: usize,
+}
+
+impl<N> StreamIter<N> {
+    fn new(items: Vec<N>) -> Self {
+        StreamIter {
+            items: Rc::new(items),
+            index: 0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len() - self.index
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<N: Clone> Iterator for StreamIter<N> {
+    type Item = N;
+
+    fn next(&mut self) -> Option<N> {
+        let item = self.items.get(self.index).cloned();
+        if item.is_some() {
+            self.index += 1;
+        }
+        item
+    }
+}
+
+impl<N: Clone> IntoIterator for &StreamIter<N> {
+    type Item = N;
+    type IntoIter = StreamIter<N>;
+
+    fn into_iter(self) -> StreamIter<N> {
+        self.clone()
+    }
+}
+
+impl<N: Debug> Debug for StreamIter<N> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{:?}", &self.items[self.index..])
+    }
+}
+
 impl<T, N> Grammar<T, N>
 where
     N: Clone,
@@ -74,16 +133,18 @@ where
         }
     }
 
-    pub fn star(self: Self) -> Grammar<T, Vec<N>>
+    pub fn star(self: Self) -> Grammar<T, StreamIter<N>>
     where
         T: 'static + Debug,
         N: 'static + Debug,
     {
         use Grammar::*;
-        self.clone().plus().or(&Nonterminal(vec![]))
+        self.clone()
+            .plus()
+            .or(&Nonterminal(StreamIter::new(vec![])))
     }
 
-    pub fn plus(self: Self) -> Grammar<T, Vec<N>>
+    pub fn plus(self: Self) -> Grammar<T, StreamIter<N>>
     where
         T: 'static + Debug,
         N: 'static + Debug,
@@ -94,7 +155,7 @@ where
             self.clone().star().then(move |v_a| {
                 let mut result = vec![a.clone()];
                 result.extend(v_a.clone());
-                Nonterminal(result)
+                Nonterminal(StreamIter::new(result))
             })
         })
     }
@@ -177,10 +238,10 @@ where
 {
     item()
         .star() // Stack inputs
-        .then(move |cs: &Vec<T>| {
+        .then(move |cs: &StreamIter<T>| {
             // Initialize with grammar of the necessary
             // depth, then apply it to history of inputs
-            cs.iter().fold(generator(cs.len()), |g, c| g.shift(c))
+            cs.clone().fold(generator(cs.len()), |g, c| g.shift(&c))
         })
 }
 
