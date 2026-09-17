@@ -11,28 +11,37 @@ where
     Shift(Rc<dyn Fn(&T) -> Grammar<T, N>>),
 }
 
-// A cheaply-cloneable, lazily-evaluated iterator over the
-// elements matched by `star`/`plus`. It shares its backing
-// storage via `Rc`, so cloning it (as `Grammar::Nonterminal`
-// values routinely are) never copies the matched elements
-// themselves, and consumers pull items one at a time instead
-// of receiving an already-materialized `Vec<N>`.
-#[derive(Clone)]
+trait CloneIterator<N>: Iterator<Item = N> {
+    fn clone_box(&self) -> Box<dyn CloneIterator<N>>;
+}
+
+impl<N, I> CloneIterator<N> for I
+where
+    I: Iterator<Item = N> + Clone + 'static,
+{
+    fn clone_box(&self) -> Box<dyn CloneIterator<N>> {
+        Box::new(self.clone())
+    }
+}
+
+// A cloneable, lazily-evaluated iterator over the elements
+// matched by `star`/`plus`.
 pub struct StreamIter<N> {
-    items: Rc<Vec<N>>,
-    index: usize,
+    items: Box<dyn CloneIterator<N>>,
 }
 
 impl<N> StreamIter<N> {
-    fn new(items: Vec<N>) -> Self {
+    fn new<I>(items: I) -> Self
+    where
+        I: Iterator<Item = N> + Clone + 'static,
+    {
         StreamIter {
-            items: Rc::new(items),
-            index: 0,
+            items: Box::new(items),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.items.len() - self.index
+        self.clone().count()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -40,19 +49,23 @@ impl<N> StreamIter<N> {
     }
 }
 
-impl<N: Clone> Iterator for StreamIter<N> {
-    type Item = N;
-
-    fn next(&mut self) -> Option<N> {
-        let item = self.items.get(self.index).cloned();
-        if item.is_some() {
-            self.index += 1;
+impl<N> Clone for StreamIter<N> {
+    fn clone(&self) -> Self {
+        StreamIter {
+            items: self.items.clone_box(),
         }
-        item
     }
 }
 
-impl<N: Clone> IntoIterator for &StreamIter<N> {
+impl<N> Iterator for StreamIter<N> {
+    type Item = N;
+
+    fn next(&mut self) -> Option<N> {
+        self.items.next()
+    }
+}
+
+impl<N> IntoIterator for &StreamIter<N> {
     type Item = N;
     type IntoIter = StreamIter<N>;
 
@@ -66,7 +79,7 @@ impl<N: Debug> Debug for StreamIter<N> {
         &self,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        write!(f, "{:?}", &self.items[self.index..])
+        f.debug_list().entries(self.clone()).finish()
     }
 }
 
@@ -141,7 +154,7 @@ where
         use Grammar::*;
         self.clone()
             .plus()
-            .or(&Nonterminal(StreamIter::new(vec![])))
+            .or(&Nonterminal(StreamIter::new(std::iter::empty())))
     }
 
     pub fn plus(self: Self) -> Grammar<T, StreamIter<N>>
@@ -153,9 +166,9 @@ where
         self.clone().then(move |a| {
             let a = a.clone();
             self.clone().star().then(move |v_a| {
-                let mut result = vec![a.clone()];
-                result.extend(v_a.clone());
-                Nonterminal(StreamIter::new(result))
+                Nonterminal(StreamIter::new(
+                    std::iter::once(a.clone()).chain(v_a.clone()),
+                ))
             })
         })
     }
